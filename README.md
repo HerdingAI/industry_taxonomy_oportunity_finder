@@ -1,347 +1,459 @@
-# NAICS Industry Taxonomy & AI Opportunity Finder
+# Strategic Market Intelligence System
+## AI-Powered Industry Analysis for Business Opportunity Discovery
 
-An AI-powered agent system that systematically analyzes U.S. industries (at the 6-digit NAICS level) to discover hidden automation and GenAI opportunities.
+**Think like an MBA. Analyze like a data scientist. Write like Hemingway.**
+
+---
 
 ## Overview
 
-This tool uses **LangGraph** and **OpenRouter's Sherlock-Think-Alpha** model to perform deep industry analysis, identifying:
+A multi-agent research system that systematically analyzes U.S. industries (6-digit NAICS codes) to identify high-value AI and automation opportunities.
 
-- Industry hierarchies and operational workflows
-- Technology gaps and manual processes
-- Specific AI/automation opportunities
-- Hidden niche markets and underserved segments
-- Top 5 ranked startup opportunities per industry
+**Current Focus**: Professional Services (54xxxx) - 43 industries from legal to veterinary services
 
-Perfect for entrepreneurs, investors, and researchers seeking to discover "unknown unknowns" in unfamiliar industries.
+### What Makes This Different
 
-## Features
+**Depth ≠ Length**
+- Every sentence earns its place
+- Numbers over adjectives
+- Insights over descriptions
+- "Why" and "So what?" over "What"
 
-- 🔍 **Comprehensive Industry Research**: Deep analysis of industry structure, value chains, and market dynamics
-- 📋 **Workflow Mapping**: Detailed breakdown of operational processes and pain points
-- 💻 **Technology Landscape Analysis**: Current software, vendors, and adoption gaps
-- 🤖 **AI Opportunity Identification**: Specific automation opportunities with implementation details
-- 🎯 **Niche Discovery**: Uncover hidden segments and overlooked markets
-- 🏆 **Ranked Opportunities**: Top 5 viable startup ideas with competitive analysis
-- 📊 **Structured Outputs**: JSON and Markdown reports for each analysis
+**MBA + Data Science**
+- Porter's Five Forces (scored 0-100)
+- Value chain analysis
+- Quantitative opportunity scoring
+- Unit economics modeling
+- Risk-adjusted valuations
+
+**Real Data, Not Hallucinations**
+- DuckDuckGo web search
+- Census Bureau data
+- BLS employment statistics
+- Confidence intervals on all estimates
+
+**Learning System**
+- Vector database (ChromaDB) for semantic search
+- SQLite for structured queries
+- Each analysis improves the next
+
+---
 
 ## Architecture
 
-The system uses a **LangGraph workflow** with 7 sequential nodes:
+### 4-Agent Pipeline
 
-1. **Research Industry** → Gather foundational information
-2. **Map Workflows** → Identify operational processes and pain points
-3. **Analyze Technology** → Assess current tech landscape and gaps
-4. **Identify Opportunities** → Find specific AI/automation use cases
-5. **Find Niches** → Discover hidden markets and segments
-6. **Rank Opportunities** → Select and rank top 5 opportunities
-7. **Generate Report** → Produce comprehensive output
+```
+Research Agent → Strategic Analyst → Quantitative Analyst → Synthesizer
+      ↓                ↓                     ↓                  ↓
+  Web search     Porter's Forces      Opportunity           Concise
+  Census data    Value chain          scoring              report
+  BLS stats      Positioning          Unit economics       (<3 pages)
+```
+
+### Agent Breakdown
+
+**1. Research Agent** (Facts, not opinions)
+- DuckDuckGo search for market data
+- Extracts: market size, growth, establishments, employment
+- Identifies: pain points, tech stack, competitive dynamics
+- Output: Structured JSON with confidence scores
+
+**2. Strategic Analyst** (MBA frameworks)
+- Porter's Five Forces (scored 0-100 per force)
+- Strategic positioning analysis
+- Value chain opportunity identification
+- Output: Insight-dense strategic assessment
+
+**3. Quantitative Analyst** (Data science)
+- TAM/SAM/SOM market sizing
+- Unit economics (ARPU, LTV, CAC, margins)
+- Multi-criteria opportunity scoring (0-100)
+- Risk-adjusted valuations
+- Output: Numbers with assumptions and confidence intervals
+
+**4. Synthesizer** (Concise reporting)
+- Combines all analysis
+- Max 2-3 pages per industry
+- Every sentence must add value
+- Output: Actionable markdown report
+
+### Data Storage
+
+**SQLite**: Industries, opportunities, Porter's scores, metrics
+**ChromaDB**: Vector search across research, insights, opportunities
+
+---
 
 ## Installation
 
-### 1. Clone the repository
+### 1. Dependencies
 
 ```bash
-git clone <your-repo-url>
-cd industry_taxonomy_oportunity_finder
-```
-
-### 2. Create virtual environment
-
-```bash
+# Create virtual environment
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
-### 3. Install dependencies
-
-```bash
+# Install packages
 pip install -r requirements.txt
 ```
 
-### 4. Configure API keys
-
-Copy the example environment file:
+### 2. Configuration
 
 ```bash
+# Copy environment template
 cp .env.example .env
+
+# Edit .env and add your OpenRouter API key
 ```
 
-Edit `.env` and add your API keys:
-
+Your `.env`:
 ```env
-OPENROUTER_API_KEY=your_openrouter_api_key_here
-TAVILY_API_KEY=your_tavily_api_key_here  # Optional but recommended
+OPENROUTER_API_KEY=sk-or-v1-xxxxxxxxxxxxx
+OPENROUTER_MODEL=openrouter/sherlock-think-alpha
 ```
 
-**Get API Keys:**
-- OpenRouter: https://openrouter.ai/
-- Tavily (optional, for web research): https://tavily.com/
+**Get API key**: https://openrouter.ai/
 
-## Usage
-
-### Single NAICS Code Analysis
-
-**Interactive mode:**
-```bash
-python run_analysis.py
-```
-
-**Command-line mode:**
-```bash
-python run_analysis.py 541511
-```
-
-Example NAICS codes:
-- `541511` - Custom Computer Programming Services
-- `541512` - Computer Systems Design Services
-- `621111` - Offices of Physicians (except Mental Health)
-- `236220` - Commercial and Institutional Building Construction
-- `311811` - Retail Bakeries
-
-### Batch Analysis
-
-Create a file with one NAICS code per line (e.g., `naics_codes.txt`):
-
-```
-541511
-541512
-541513
-```
-
-Run batch analysis:
+### 3. Verify Setup
 
 ```bash
-python batch_analyze.py naics_codes.txt
-```
-
-### Direct Python Usage
-
-```python
-from naics_analyzer import NAICSAnalyzer
-
-# Initialize analyzer
-analyzer = NAICSAnalyzer()
-
-# Analyze a NAICS code
-result = analyzer.analyze("541511")
-
-# Save reports
-json_file, md_file = analyzer.save_report(result)
-
-# Access results
-print(result['industry_overview'])
-print(result['top_opportunities'])
-```
-
-## Output
-
-Analysis results are saved in the `outputs/` directory:
-
-- **JSON file**: `naics_<code>_<timestamp>.json` - Full structured data
-- **Markdown file**: `naics_<code>_<timestamp>.md` - Human-readable report
-
-### Report Structure
-
-Each report includes:
-
-1. **Industry Overview**
-   - Definition
-   - Sub-segments
-   - Value chain
-   - Market size
-   - Major players
-
-2. **Operational Workflow Mapping**
-   - End-to-end processes
-   - Daily tasks and jobs
-   - Pain points and bottlenecks
-   - Tools and systems used
-
-3. **Technology Landscape**
-   - Current software categories
-   - Major vendors
-   - Adoption levels
-   - Technology gaps
-   - Barriers to adoption
-
-4. **AI & Automation Opportunities**
-   - Workflow step to automate
-   - Current vs. automated state
-   - Technology solution
-   - Expected value
-   - Target customers
-   - Why unsolved
-   - Implementation difficulty
-   - Competitive advantages
-
-5. **Hidden Niches**
-   - Specialized sub-segments
-   - Manual micro-workflows
-   - Underserved technology segments
-   - Low-tech maturity pockets
-
-6. **Top 5 Startup Opportunities**
-   - Detailed descriptions
-   - Target markets
-   - Value propositions
-   - Competitive moats
-   - Go-to-market strategies
-   - Risk factors
-
-## Configuration
-
-### Model Configuration
-
-Default model: `openrouter/sherlock-think-alpha`
-
-To use a different model, update `.env`:
-
-```env
-OPENROUTER_MODEL=openrouter/anthropic/claude-3.5-sonnet
-```
-
-### Customizing Analysis Depth
-
-Edit `naics_analyzer.py` to modify:
-
-- Temperature (creativity): `temperature=0.7`
-- Max tokens (response length): `max_tokens=4000`
-- Prompt templates in each node method
-
-## NAICS Code Reference
-
-Find NAICS codes at: https://www.census.gov/naics/
-
-**Popular industries for AI opportunities:**
-
-- **Professional Services**: 541xxx
-- **Healthcare**: 621xxx, 622xxx
-- **Construction**: 236xxx, 237xxx
-- **Manufacturing**: 311xxx - 339xxx
-- **Finance & Insurance**: 522xxx, 524xxx
-- **Real Estate**: 531xxx
-- **Legal Services**: 541110
-- **Accounting**: 541211
-
-## Troubleshooting
-
-### API Key Errors
-
-```
-ValueError: OPENROUTER_API_KEY not found in environment variables
-```
-
-**Solution**: Ensure `.env` file exists and contains valid API key
-
-### JSON Parsing Errors
-
-The analyzer includes robust JSON extraction that handles markdown code blocks. If you still encounter parsing errors, check the model's output format.
-
-### Rate Limiting
-
-For batch analysis, the script includes 10-second delays between requests. Adjust in `batch_analyze.py` if needed.
-
-### Timeout Issues
-
-Large industries may take longer to analyze. Increase timeout in OpenAI client initialization if needed.
-
-## Advanced Usage
-
-### Custom Workflow Modifications
-
-The LangGraph workflow is modular. To add custom analysis steps:
-
-1. Add a new method in `NAICSAnalyzer` class
-2. Add node to workflow in `_build_graph()`
-3. Define edges to/from the new node
-
-Example:
-
-```python
-def custom_analysis(self, state: AnalysisState) -> AnalysisState:
-    # Your custom logic here
-    return state
-
-# In _build_graph():
-workflow.add_node("custom_analysis", self.custom_analysis)
-workflow.add_edge("rank_opportunities", "custom_analysis")
-workflow.add_edge("custom_analysis", "generate_report")
-```
-
-### Integrating Web Search
-
-To add real-time web research (requires Tavily API):
-
-```python
-from langchain_community.tools import TavilySearchResults
-
-search = TavilySearchResults(api_key=os.getenv("TAVILY_API_KEY"))
-results = search.invoke({"query": f"NAICS {naics_code} industry trends"})
-```
-
-### Exporting to Database
-
-Save results to a database:
-
-```python
-import sqlite3
-
-def save_to_db(analysis_result):
-    conn = sqlite3.connect('naics_analysis.db')
-    cursor = conn.cursor()
-
-    cursor.execute('''
-        INSERT INTO analyses (naics_code, industry_name, analysis_json, created_at)
-        VALUES (?, ?, ?, ?)
-    ''', (
-        analysis_result['naics_code'],
-        analysis_result['industry_name'],
-        json.dumps(analysis_result),
-        datetime.now()
-    ))
-
-    conn.commit()
-    conn.close()
-```
-
-## Roadmap
-
-- [ ] Add parallel analysis for faster batch processing
-- [ ] Integrate real-time web search for current data
-- [ ] Add visualization of workflow diagrams
-- [ ] Create web UI for interactive exploration
-- [ ] Build opportunity comparison matrix
-- [ ] Add export to PDF/PowerPoint
-- [ ] Implement caching to avoid re-analyzing same NAICS codes
-
-## Contributing
-
-Contributions welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch
-3. Submit a pull request
-
-## License
-
-[Add your license here]
-
-## Support
-
-For issues or questions:
-- Open a GitHub issue
-- Check OpenRouter status: https://status.openrouter.ai/
-
-## Citation
-
-If you use this tool in research, please cite:
-
-```
-Industry Taxonomy & AI Opportunity Finder
-Using LangGraph and OpenRouter Sherlock-Think-Alpha
-[Your Name/Organization], 2024
+python test_setup.py
 ```
 
 ---
 
-**Happy Opportunity Hunting! 🚀**
+## Usage
+
+### Analyze Single Industry
+
+```bash
+python analyze.py 541511
+```
+
+**Output**:
+```markdown
+## NAICS 541511: Custom Computer Programming Services
+
+**Score**: 67/100 | **Confidence**: 76% | **Verdict**: MODERATE OPPORTUNITY
+
+### Market Reality
+- $185.1B market, 8.2% CAGR
+- 89,400 firms (HHI=182: hyper-fragmented)
+- Avg firm revenue: $2.1M
+- Key trends: AI code generation, offshore competition, cloud migration
+- Digital maturity: high
+
+### Strategic Insight
+**Porter's Analysis**: Unattractive for generalists; attractive for vertical specialists with moats
+
+**Winning strategy**: Vertical specialization with proprietary data moats
+**Avoid**: Generalist hourly billing
+
+### Top Opportunity: Healthcare-Specific AI Code Generator (Score: 85/100)
+
+**The Play**: HL7/FHIR-native code assistant with built-in HIPAA compliance
+
+**Numbers**:
+- TAM $8.2B, SAM $2.1B, SOM Y3 $105M
+- $7,188 ARPU, 87% margin, 7.0:1 LTV:CAC
+
+**Why Now**: GenAI crossed quality threshold; HIPAA-compliant code gen unsolved
+**Why Unsolved**: Requires rare combo of healthcare domain + AI expertise
+**Moat**: Compliance library + health system partnerships (data flywheel)
+
+**Key Risk**: Epic bundles competing feature (35% probability)
+```
+
+### Analyze Entire Sector
+
+```bash
+python analyze.py --sector 54
+```
+
+Analyzes all 43 Professional Services industries:
+- Law firms, CPAs, engineers, architects
+- Software development, consulting
+- Advertising, marketing, design
+- R&D, testing labs, veterinary
+
+**Duration**: ~3-5 minutes per industry (~3 hours total)
+
+### List Analyzed Industries
+
+```bash
+python analyze.py --list
+```
+
+```
+NAICS    Name                                     Score   Opps
+----------------------------------------------------------------
+541511   Custom Computer Programming Services     67      3
+541211   Offices of Certified Public Accountants  72      4
+541110   Offices of Lawyers                       58      2
+...
+```
+
+### Show Top Opportunities
+
+```bash
+python analyze.py --top 20
+```
+
+### Search Opportunities
+
+```bash
+python analyze.py --search "healthcare AI automation"
+```
+
+Semantic search across all identified opportunities using vector database.
+
+---
+
+## Example Output
+
+See `MVP_DESIGN.md` for detailed example of a complete industry analysis.
+
+**Key metrics provided**:
+- Market size (TAM/SAM/SOM with assumptions)
+- Growth rates and trends
+- Porter's Five Forces scores
+- HHI concentration index
+- Digital maturity assessment
+- Opportunity scores (0-100 with confidence)
+- Unit economics (ARPU, LTV:CAC, margins, payback)
+- Risk-adjusted valuations
+
+---
+
+## Professional Services Industries
+
+43 industries in NAICS sector 54:
+
+**Legal & Accounting** (541110-541219)
+- Lawyers, CPAs, tax preparers, payroll services
+
+**Architecture & Engineering** (541310-541380)
+- Architects, engineers, surveyors, testing labs
+
+**Specialized Design** (541410-541490)
+- Interior, industrial, graphic design
+
+**Computer Services** (541511-541519)
+- Programming, systems design, IT consulting
+
+**Management Consulting** (541611-541690)
+- Strategy, HR, marketing, environmental
+
+**R&D** (541713-541720)
+- Nanotech, biotech, physical sciences, social sciences
+
+**Advertising & Marketing** (541810-541910)
+- Ad agencies, PR, media buying, market research
+
+**Other Professional** (541920-541990)
+- Photography, translation, veterinary
+
+---
+
+## Output Files
+
+### Markdown Reports (`outputs/`)
+- Concise analysis (<3 pages)
+- All signal, no noise
+- Numbers with sources
+- Saved as: `naics_<code>_<timestamp>.md`
+
+### SQLite Database (`data/intelligence.db`)
+- Industries table (market data, scores)
+- Opportunities table (sized, scored, ranked)
+- Porter's forces table
+- Pain points, tech usage
+
+### Vector Database (`data/chromadb/`)
+- Research findings
+- Strategic insights
+- Opportunity descriptions
+- Enables semantic search
+
+---
+
+## Technical Details
+
+**Tech Stack**:
+- LangGraph: Agent orchestration
+- OpenRouter: LLM inference (Sherlock-Think-Alpha)
+- DuckDuckGo Search: Free web research (no API key!)
+- ChromaDB: Vector storage & semantic search
+- SQLite: Structured data storage
+- Pandas/NumPy: Data analysis
+
+**Cost**: ~$0.10-0.50 per industry analysis
+
+**Speed**: ~3-5 minutes per industry
+
+**Data Sources**:
+- U.S. Census Bureau (NAICS definitions, establishment counts)
+- Bureau of Labor Statistics (employment, wages)
+- Web search results (market reports, news, trends)
+- Industry publications (via search)
+
+---
+
+## Design Philosophy
+
+### Depth ≠ Length
+
+**Bad**: "This is a large and growing market with many opportunities for innovation and disruption through the application of artificial intelligence and machine learning technologies."
+
+**Good**: "$185B, 8.2% CAGR. Fragmented (HHI=182) but commoditizing. Opportunity: Vertical AI with compliance moats."
+
+### Every Number Needs Context
+
+**Bad**: "TAM is $8.2B"
+
+**Good**: "$185B industry × 4.4% applicable to this workflow = $8.2B TAM"
+
+### Strategic Insight Over Description
+
+**Bad**: "There is high competition in this market"
+
+**Good**: "Fragmented (HHI=182) but commoditizing. Price war at low-end; specialization wins high-end."
+
+---
+
+## Database Schema
+
+### Key Tables
+
+```sql
+-- Analyzed industries
+industries(naics_code, name, market_size_usd, growth_rate,
+           hhi_index, overall_score, confidence, ...)
+
+-- Scored opportunities
+opportunities(naics_code, title, opportunity_score, confidence,
+              tam_usd, sam_usd, arpu, ltv_cac_ratio, key_moat, ...)
+
+-- Porter's Five Forces
+porters_forces(naics_code, competitive_rivalry_score,
+               new_entrant_threat_score, ...)
+
+-- Pre-built views
+top_opportunities  -- Ranked by risk-adjusted score
+industry_summary   -- Aggregated metrics
+```
+
+### Vector Collections
+
+```python
+# Semantic search across:
+research_collection      # Market research findings
+opportunities_collection # Business opportunities
+insights_collection      # Strategic insights
+```
+
+---
+
+## Extensibility
+
+### Add New Data Sources
+
+```python
+# In research_agent.py
+def _gather_census_data(self, naics_code):
+    # Add Census Bureau API integration
+    pass
+```
+
+### Customize Scoring Weights
+
+```python
+# In quantitative_agent.py
+scoring_weights = {
+    'market_size': 0.30,      # Adjust these
+    'growth': 0.15,
+    'margin': 0.20,
+    'defensibility': 0.20,
+    'competition': 0.15
+}
+```
+
+### Add New MBA Frameworks
+
+```python
+# In strategic_agent.py
+def _analyze_business_model_canvas(self, data):
+    # Add new strategic framework
+    pass
+```
+
+---
+
+## Roadmap
+
+**Phase 2** (expand scope):
+- [ ] Healthcare sector (62xxxx)
+- [ ] Construction (23xxxx)
+- [ ] Manufacturing (31-33)
+
+**Phase 3** (deeper analysis):
+- [ ] Real-time Census/BLS API integration
+- [ ] Funding data (Crunchbase API)
+- [ ] Competitive intelligence (web scraping)
+- [ ] Trend detection across industries
+
+**Phase 4** (tooling):
+- [ ] Web dashboard for exploration
+- [ ] Automated sector reports
+- [ ] Opportunity comparison matrix
+- [ ] Investment thesis generator
+
+---
+
+## Documentation
+
+- `MVP_DESIGN.md` - Complete system design and philosophy
+- `ARCHITECTURE_PROPOSAL.md` - Full v2 system architecture
+- `COMPARISON.md` - v1 vs v2 comparison
+- `QUICKSTART.md` - 5-minute getting started guide
+
+---
+
+## Contributing
+
+Contributions welcome! Focus areas:
+- Additional data source integrations
+- New strategic frameworks
+- Improved scoring models
+- Industry-specific analysis templates
+
+---
+
+## License
+
+[Add your license]
+
+---
+
+## Support
+
+**Issues**: Open a GitHub issue
+**API Status**: https://status.openrouter.ai/
+**NAICS Codes**: https://www.census.gov/naics/
+
+---
+
+**Built with**: LangGraph · OpenRouter · ChromaDB · DuckDuckGo Search
+
+**Philosophy**: Insight density > word count. Numbers > adjectives. Why > what.
+
+**Goal**: Systematically discover AI opportunities across every U.S. industry.
+
+---
+
+**Ready to discover opportunities?**
+
+```bash
+python analyze.py 541511
+```
