@@ -40,6 +40,7 @@ reports/
 *.json
 *.md
 !README.md
+!QUICKSTART.md
 
 # OS
 .DS_Store
