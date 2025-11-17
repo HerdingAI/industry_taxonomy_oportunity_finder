@@ -1,0 +1,18 @@
+# Example NAICS codes for batch analysis
+# Format: One 6-digit code per line
+# Lines starting with # are ignored
+
+# Professional, Scientific, and Technical Services
+541511
+541512
+541513
+
+# Healthcare
+621111
+621112
+
+# Construction
+236220
+
+# Manufacturing
+311811
