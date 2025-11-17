@@ -150,7 +150,7 @@ print("\n[Test 5] Query Count Reduction")
 print("-" * 60)
 try:
     # Count queries in the actual code
-    with open('src/research_agent.py', 'r') as f:
+    with open('src/research_agent.py', 'r', encoding='utf-8') as f:
         content = f.read()
 
     # Check that we have 3-query lists (not 4 or 5)
