@@ -229,8 +229,16 @@ Good example: {{"activity": "requirements gathering", "current_state": "manual m
                 except:
                     pass
 
-            print(f"  ⚠️  Failed to parse JSON response")
-            return {}
+            print(f"  ⚠️  Failed to parse JSON response, returning minimal structure")
+            return {
+                'competitive_rivalry': {'score': 50, 'insight': 'Unable to assess'},
+                'new_entrant_threat': {'score': 50, 'insight': 'Unable to assess'},
+                'supplier_power': {'score': 50, 'insight': 'Unable to assess'},
+                'buyer_power': {'score': 50, 'insight': 'Unable to assess'},
+                'substitute_threat': {'score': 50, 'insight': 'Unable to assess'},
+                'overall_attractiveness': 50,
+                'strategic_verdict': 'Insufficient data for analysis'
+            }
 
 
 if __name__ == "__main__":

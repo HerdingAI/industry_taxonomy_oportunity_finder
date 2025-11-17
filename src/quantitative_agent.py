@@ -211,8 +211,40 @@ Good example: "$185B industry × 4.4% applicable to this workflow = $8.2B TAM. 2
                 except:
                     pass
 
-            print(f"  ⚠️  Failed to parse JSON")
-            return {}
+            print(f"  ⚠️  Failed to parse JSON, returning minimal structure")
+            return {
+                'opportunity_title': 'Analysis Failed',
+                'opportunity_description': 'Unable to generate opportunity description',
+                'market_sizing': {
+                    'tam_usd': None,
+                    'sam_usd': None,
+                    'som_y3_usd': None,
+                    'confidence': 0.1
+                },
+                'unit_economics': {
+                    'arpu': None,
+                    'gross_margin': None,
+                    'ltv': None,
+                    'cac': None,
+                    'ltv_cac_ratio': None,
+                    'payback_months': None
+                },
+                'scoring': {
+                    'weighted_score': 0
+                },
+                'risk_assessment': {
+                    'key_risks': ['Insufficient data for analysis'],
+                    'expected_value_y5_usd': None
+                },
+                'strategic_rationale': {
+                    'key_moat': 'Unknown',
+                    'why_now': 'Unknown',
+                    'why_unsolved': 'Unknown',
+                    'competitive_threat': 'Unknown'
+                },
+                'overall_confidence': 0.1,
+                'risk_adjusted_score': 0
+            }
 
 
 if __name__ == "__main__":

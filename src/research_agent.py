@@ -213,7 +213,24 @@ Focus on numbers. If you see ranges, use the midpoint. If data is for a year oth
             HumanMessage(content=prompt)
         ])
 
-        return self._parse_json_response(response.content)
+        result = self._parse_json_response(response.content)
+
+        # Ensure minimal valid structure if parsing failed
+        if not result or len(result) <= 1:  # Only has confidence or is empty
+            print(f"  ⚠️  Incomplete market data, using minimal structure")
+            return {
+                'market_size_usd': None,
+                'growth_rate': None,
+                'establishments': None,
+                'employment': None,
+                'avg_wage': None,
+                'market_concentration': None,
+                'key_trends': [],
+                'sources': [],
+                'confidence': 0.1
+            }
+
+        return result
 
     def _research_competition(self, naics_code: str, industry_name: str) -> Dict[str, Any]:
         """Research competitive dynamics and major players"""
@@ -268,7 +285,21 @@ If you can't find HHI, estimate based on market structure descriptions."""
             HumanMessage(content=prompt)
         ])
 
-        return self._parse_json_response(response.content)
+        result = self._parse_json_response(response.content)
+
+        # Ensure minimal valid structure if parsing failed
+        if not result or len(result) <= 1:  # Only has confidence or is empty
+            print(f"  ⚠️  Incomplete competitive data, using minimal structure")
+            return {
+                'hhi_index': None,
+                'top_players': [],
+                'market_share_top_3': None,
+                'competitive_dynamics': 'Insufficient data',
+                'barriers_to_entry': 'unknown',
+                'confidence': 0.1
+            }
+
+        return result
 
     def _research_tech_and_pain(self, naics_code: str, industry_name: str) -> Dict[str, Any]:
         """Research technology usage and pain points"""
@@ -326,7 +357,21 @@ Prioritize pain points related to manual work, data entry, compliance, communica
             HumanMessage(content=prompt)
         ])
 
-        return self._parse_json_response(response.content)
+        result = self._parse_json_response(response.content)
+
+        # Ensure minimal valid structure if parsing failed
+        if not result or len(result) <= 1:  # Only has confidence or is empty
+            print(f"  ⚠️  Incomplete tech/pain data, using minimal structure")
+            return {
+                'common_tools': [],
+                'digital_maturity': 'unknown',
+                'tech_spend_per_employee': None,
+                'pain_points': [],
+                'manual_processes': [],
+                'confidence': 0.1
+            }
+
+        return result
 
     def _consolidate_findings(
         self,

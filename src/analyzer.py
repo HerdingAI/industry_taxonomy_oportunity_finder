@@ -122,6 +122,7 @@ class IndustryAnalyzer:
         except Exception as e:
             print(f"❌ Research failed: {e}")
             state['error'] = f"Research error: {str(e)}"
+            state['error_count'] = state.get('error_count', 0) + 1
 
         return state
 
@@ -148,6 +149,7 @@ class IndustryAnalyzer:
         except Exception as e:
             print(f"❌ Strategic analysis failed: {e}")
             state['error'] = f"Strategic error: {str(e)}"
+            state['error_count'] = state.get('error_count', 0) + 1
 
         return state
 
@@ -163,6 +165,7 @@ class IndustryAnalyzer:
         except Exception as e:
             print(f"❌ Quantitative analysis failed: {e}")
             state['error'] = f"Quantitative error: {str(e)}"
+            state['error_count'] = state.get('error_count', 0) + 1
 
         return state
 
@@ -179,30 +182,35 @@ class IndustryAnalyzer:
         except Exception as e:
             print(f"❌ Synthesis failed: {e}")
             state['error'] = f"Synthesis error: {str(e)}"
+            state['error_count'] = state.get('error_count', 0) + 1
 
         return state
 
     def _save_node(self, state: AnalysisState) -> AnalysisState:
         """Save results to database"""
+        def safe_get(d, key, default=None):
+            """Safely get nested dict values"""
+            return d.get(key, default) if isinstance(d, dict) else default
+
         try:
             # Save industry data
             research = state['research_data']
             strategic = state['strategic_data']
 
-            porters = strategic.get('porters_five_forces', {})
+            porters = safe_get(strategic, 'porters_five_forces', {})
 
             self.db.save_industry({
                 'naics_code': state['naics_code'],
                 'name': state['industry_name'],
-                'establishments': research.get('establishments'),
-                'employment': research.get('employment'),
-                'avg_wage': research.get('avg_wage'),
-                'market_size_usd': research.get('market_size_usd'),
-                'growth_rate': research.get('growth_rate'),
-                'hhi_index': research.get('hhi_index'),
-                'digital_maturity_score': self._convert_maturity_to_score(research.get('digital_maturity')),
-                'overall_score': porters.get('overall_attractiveness'),
-                'confidence': research.get('confidence')
+                'establishments': safe_get(research, 'establishments'),
+                'employment': safe_get(research, 'employment'),
+                'avg_wage': safe_get(research, 'avg_wage'),
+                'market_size_usd': safe_get(research, 'market_size_usd'),
+                'growth_rate': safe_get(research, 'growth_rate'),
+                'hhi_index': safe_get(research, 'hhi_index'),
+                'digital_maturity_score': self._convert_maturity_to_score(safe_get(research, 'digital_maturity')),
+                'overall_score': safe_get(porters, 'overall_attractiveness'),
+                'confidence': safe_get(research, 'confidence')
             })
 
             # Save Porter's forces
@@ -215,44 +223,44 @@ class IndustryAnalyzer:
 
             # Save opportunities
             quant = state['quantitative_data']
-            for opp in quant.get('opportunities', []):
-                market_sizing = opp.get('market_sizing', {})
-                unit_econ = opp.get('unit_economics', {})
-                rationale = opp.get('strategic_rationale', {})
-                risk = opp.get('risk_assessment', {})
+            for opp in safe_get(quant, 'opportunities', []):
+                market_sizing = safe_get(opp, 'market_sizing', {})
+                unit_econ = safe_get(opp, 'unit_economics', {})
+                rationale = safe_get(opp, 'strategic_rationale', {})
+                risk = safe_get(opp, 'risk_assessment', {})
 
                 opp_id = self.db.save_opportunity({
                     'naics_code': state['naics_code'],
-                    'title': opp.get('opportunity_title'),
-                    'description': opp.get('opportunity_description'),
+                    'title': safe_get(opp, 'opportunity_title', 'Unnamed Opportunity'),
+                    'description': safe_get(opp, 'opportunity_description', ''),
                     'opportunity_type': 'ai_automation',
-                    'opportunity_score': opp.get('risk_adjusted_score'),
-                    'confidence': opp.get('overall_confidence'),
-                    'risk_adjusted_score': opp.get('risk_adjusted_score'),
-                    'tam_usd': market_sizing.get('tam_usd'),
-                    'sam_usd': market_sizing.get('sam_usd'),
-                    'som_y3_usd': market_sizing.get('som_y3_usd'),
-                    'arpu': unit_econ.get('arpu'),
-                    'gross_margin': unit_econ.get('gross_margin'),
-                    'ltv': unit_econ.get('ltv'),
-                    'cac': unit_econ.get('cac'),
-                    'ltv_cac_ratio': unit_econ.get('ltv_cac_ratio'),
-                    'payback_months': unit_econ.get('payback_months'),
-                    'key_moat': rationale.get('key_moat'),
-                    'why_now': rationale.get('why_now'),
-                    'why_unsolved': rationale.get('why_unsolved'),
-                    'competitive_threat': rationale.get('competitive_threat'),
-                    'risk_factors': risk.get('key_risks', []),
-                    'expected_value_y5_usd': risk.get('expected_value_y5_usd')
+                    'opportunity_score': safe_get(opp, 'risk_adjusted_score', 0),
+                    'confidence': safe_get(opp, 'overall_confidence', 0),
+                    'risk_adjusted_score': safe_get(opp, 'risk_adjusted_score', 0),
+                    'tam_usd': safe_get(market_sizing, 'tam_usd'),
+                    'sam_usd': safe_get(market_sizing, 'sam_usd'),
+                    'som_y3_usd': safe_get(market_sizing, 'som_y3_usd'),
+                    'arpu': safe_get(unit_econ, 'arpu'),
+                    'gross_margin': safe_get(unit_econ, 'gross_margin'),
+                    'ltv': safe_get(unit_econ, 'ltv'),
+                    'cac': safe_get(unit_econ, 'cac'),
+                    'ltv_cac_ratio': safe_get(unit_econ, 'ltv_cac_ratio'),
+                    'payback_months': safe_get(unit_econ, 'payback_months'),
+                    'key_moat': safe_get(rationale, 'key_moat', ''),
+                    'why_now': safe_get(rationale, 'why_now', ''),
+                    'why_unsolved': safe_get(rationale, 'why_unsolved', ''),
+                    'competitive_threat': safe_get(rationale, 'competitive_threat', ''),
+                    'risk_factors': safe_get(risk, 'key_risks', []),
+                    'expected_value_y5_usd': safe_get(risk, 'expected_value_y5_usd')
                 })
 
                 # Add to vector DB
                 self.db.add_opportunity_to_vector(
                     opp_id,
-                    f"{opp.get('opportunity_title')}: {opp.get('opportunity_description')}",
+                    f"{safe_get(opp, 'opportunity_title', 'Unnamed')}: {safe_get(opp, 'opportunity_description', '')}",
                     {
                         'naics_code': state['naics_code'],
-                        'score': opp.get('risk_adjusted_score')
+                        'score': safe_get(opp, 'risk_adjusted_score', 0)
                     }
                 )
 
@@ -262,6 +270,7 @@ class IndustryAnalyzer:
         except Exception as e:
             print(f"❌ Save failed: {e}")
             state['error'] = f"Save error: {str(e)}"
+            state['error_count'] = state.get('error_count', 0) + 1
 
         return state
 
@@ -311,8 +320,11 @@ class IndustryAnalyzer:
         duration = (datetime.now() - start_time).total_seconds()
 
         print(f"\n{'='*60}")
-        if final_state.get('error'):
-            print(f"❌ Analysis completed with errors: {final_state['error']}")
+        error_count = final_state.get('error_count', 0)
+        if error_count > 0:
+            print(f"⚠️  Analysis completed with {error_count} error(s) in {duration:.1f}s")
+            if error_count >= 3:
+                print(f"❌ WARNING: High error count ({error_count}) - results may be unreliable")
         else:
             print(f"✅ Analysis completed successfully in {duration:.1f}s")
         print(f"{'='*60}\n")
