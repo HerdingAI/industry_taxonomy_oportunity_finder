@@ -41,6 +41,8 @@ reports/
 *.md
 !README.md
 !QUICKSTART.md
+!ARCHITECTURE_PROPOSAL.md
+!COMPARISON.md
 
 # OS
 .DS_Store
