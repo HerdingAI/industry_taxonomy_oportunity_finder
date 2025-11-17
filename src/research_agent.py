@@ -18,6 +18,30 @@ class ResearchAgent:
         self.llm = llm
         self.ddg = DDGS()
 
+    def _simplify_industry_name(self, industry_name: str) -> str:
+        """Convert formal NAICS names to searchable terms"""
+        # Remove common formal terms that don't appear in search results
+        replacements = {
+            'Custom Computer Programming Services': 'software development',
+            'Computer Systems Design Services': 'IT consulting systems design',
+            'Offices of Certified Public Accountants': 'accounting CPA services',
+            'Offices of Lawyers': 'legal services law firms',
+            'Architectural Services': 'architecture firms',
+            'Engineering Services': 'engineering consulting',
+        }
+
+        # Return specific mapping if exists, otherwise clean up the name
+        if industry_name in replacements:
+            return replacements[industry_name]
+
+        # Generic cleanup: remove "services", "offices of", etc.
+        cleaned = industry_name.lower()
+        cleaned = cleaned.replace(' services', '')
+        cleaned = cleaned.replace('offices of ', '')
+        cleaned = cleaned.replace(' (except', '')  # Remove exceptions
+
+        return cleaned
+
     def research_industry(self, naics_code: str, industry_name: str = None) -> Dict[str, Any]:
         """
         Conduct comprehensive research on a NAICS industry
@@ -88,8 +112,31 @@ class ResearchAgent:
     def _get_naics_definition(self, naics_code: str) -> str:
         """Get official NAICS industry definition"""
 
-        search_query = f"NAICS {naics_code} definition census bureau"
-        results = list(self.ddg.text(search_query, max_results=3))
+        # Try multiple query variations
+        queries = [
+            f"NAICS {naics_code} definition",
+            f"what is NAICS code {naics_code}",
+            f"NAICS {naics_code} industry"
+        ]
+
+        results = []
+        for query in queries:
+            try:
+                search_results = list(self.ddg.text(query, max_results=2))
+                results.extend(search_results)
+                if results:  # Stop if we got some results
+                    break
+            except:
+                continue
+
+        if not results:
+            # Fallback: use LLM knowledge
+            prompt = f"What industry does NAICS code {naics_code} represent? Return only the industry name."
+            response = self.llm.invoke([
+                SystemMessage(content="You provide NAICS industry names."),
+                HumanMessage(content=prompt)
+            ])
+            return response.content.strip()
 
         context = "\n\n".join([f"{r['title']}: {r['body']}" for r in results])
 
@@ -109,12 +156,17 @@ Return ONLY the industry name, nothing else."""
     def _gather_market_data(self, naics_code: str, industry_name: str) -> Dict[str, Any]:
         """Search for market size, growth, employment data"""
 
+        # Use simplified, searchable industry terms
+        search_term = self._simplify_industry_name(industry_name)
+
+        # Use natural language queries that match how people actually write
+        # Focus on industry terms, not NAICS codes
         queries = [
-            f"NAICS {naics_code} market size revenue 2024",
-            f"NAICS {naics_code} number of establishments businesses",
-            f"NAICS {naics_code} employment statistics BLS",
-            f"{industry_name} industry growth rate forecast",
-            f"{industry_name} market trends 2024 2025"
+            f"{search_term} market size 2024",
+            f"{search_term} industry revenue statistics",
+            f"how big is the {search_term} industry",
+            f"{search_term} market growth forecast",
+            f"{search_term} industry trends 2024"
         ]
 
         search_results = []
@@ -166,10 +218,13 @@ Focus on numbers. If you see ranges, use the midpoint. If data is for a year oth
     def _research_competition(self, naics_code: str, industry_name: str) -> Dict[str, Any]:
         """Research competitive dynamics and major players"""
 
+        search_term = self._simplify_industry_name(industry_name)
+
         queries = [
-            f"{industry_name} major companies market share",
-            f"{industry_name} competitive landscape market leaders",
-            f"NAICS {naics_code} market concentration HHI"
+            f"top companies in {search_term}",
+            f"{search_term} market leaders competitors",
+            f"{search_term} industry fragmented or concentrated",
+            f"biggest {search_term} companies"
         ]
 
         search_results = []
@@ -218,11 +273,14 @@ If you can't find HHI, estimate based on market structure descriptions."""
     def _research_tech_and_pain(self, naics_code: str, industry_name: str) -> Dict[str, Any]:
         """Research technology usage and pain points"""
 
+        search_term = self._simplify_industry_name(industry_name)
+
         queries = [
-            f"{industry_name} software tools commonly used",
-            f"{industry_name} pain points challenges problems",
-            f"{industry_name} digital transformation technology adoption",
-            f"{industry_name} inefficiencies manual processes"
+            f"what software do {search_term} companies use",
+            f"{search_term} biggest challenges problems",
+            f"{search_term} pain points inefficiencies",
+            f"technology adoption in {search_term}",
+            f"manual processes in {search_term}"
         ]
 
         search_results = []
@@ -280,11 +338,11 @@ Prioritize pain points related to manual work, data entry, compliance, communica
     ) -> Dict[str, Any]:
         """Consolidate all research into structured format"""
 
-        # Calculate overall confidence
+        # Calculate overall confidence (handle None values)
         confidences = [
-            market_data.get('confidence', 0.5),
-            competitive_data.get('confidence', 0.5),
-            tech_pain_data.get('confidence', 0.5)
+            market_data.get('confidence') or 0.5,
+            competitive_data.get('confidence') or 0.5,
+            tech_pain_data.get('confidence') or 0.5
         ]
         overall_confidence = sum(confidences) / len(confidences)
 
