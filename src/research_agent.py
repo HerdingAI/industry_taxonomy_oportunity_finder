@@ -5,8 +5,27 @@ Focus: Facts and numbers, not opinions
 
 import json
 import re
+import time
 from typing import Dict, Any, List
-from duckduckgo_search import DDGS
+
+# Try new package name first, fallback to old
+try:
+    from ddgs import DDGS  # New package name
+except ImportError:
+    try:
+        from duckduckgo_search import DDGS  # Old package name (deprecated)
+        import warnings
+        warnings.warn(
+            "Using deprecated 'duckduckgo-search' package. "
+            "Please upgrade: pip uninstall duckduckgo-search && pip install ddgs",
+            DeprecationWarning,
+            stacklevel=2
+        )
+    except ImportError:
+        raise ImportError(
+            "No DuckDuckGo search package found. Install with: pip install ddgs"
+        )
+
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
@@ -41,6 +60,51 @@ class ResearchAgent:
         cleaned = cleaned.replace(' (except', '')  # Remove exceptions
 
         return cleaned
+
+    def _search_with_retry(self, query: str, max_results: int = 5) -> List[Dict]:
+        """
+        Search with exponential backoff retry and rate limiting
+
+        Handles:
+        - Rate limiting (waits between attempts)
+        - Transient failures (retries up to 3 times)
+        - Complete failures (returns empty list)
+
+        Args:
+            query: Search query string
+            max_results: Maximum number of results to return
+
+        Returns:
+            List of search result dictionaries, or empty list if all attempts fail
+        """
+        for attempt in range(3):
+            try:
+                # Add delay to avoid rate limiting
+                if attempt > 0:
+                    wait_time = 2 ** attempt  # Exponential backoff: 2s, 4s, 8s
+                    print(f"  ⏳ Waiting {wait_time}s before retry...")
+                    time.sleep(wait_time)
+                else:
+                    # Always wait 1s between searches to be respectful
+                    time.sleep(1)
+
+                results = list(self.ddg.text(query, max_results=max_results))
+
+                if results:
+                    return results
+                else:
+                    # No results doesn't mean error, but let's try again in case it's transient
+                    if attempt < 2:
+                        print(f"  ⚠️  No results, retrying... (attempt {attempt + 2}/3)")
+
+            except Exception as e:
+                if attempt < 2:
+                    print(f"  ⚠️  Search error, retrying... (attempt {attempt + 2}/3)")
+                else:
+                    # Final attempt failed
+                    print(f"  ⚠️  Search failed after 3 attempts: {type(e).__name__}")
+
+        return []
 
     def research_industry(self, naics_code: str, industry_name: str = None) -> Dict[str, Any]:
         """
@@ -121,13 +185,10 @@ class ResearchAgent:
 
         results = []
         for query in queries:
-            try:
-                search_results = list(self.ddg.text(query, max_results=2))
-                results.extend(search_results)
-                if results:  # Stop if we got some results
-                    break
-            except:
-                continue
+            search_results = self._search_with_retry(query, max_results=2)
+            results.extend(search_results)
+            if results:  # Stop if we got some results
+                break
 
         if not results:
             # Fallback: use LLM knowledge
@@ -161,25 +222,20 @@ Return ONLY the industry name, nothing else."""
 
         # Use natural language queries that match how people actually write
         # Focus on industry terms, not NAICS codes
+        # Reduced from 5 to 3 queries to minimize rate limiting
         queries = [
             f"{search_term} market size 2024",
-            f"{search_term} industry revenue statistics",
             f"how big is the {search_term} industry",
-            f"{search_term} market growth forecast",
             f"{search_term} industry trends 2024"
         ]
 
         search_results = []
         for query in queries:
-            try:
-                results = list(self.ddg.text(query, max_results=3))
-                if not results:
-                    print(f"  ⚠️  No results for '{query}'")
-                    continue
+            results = self._search_with_retry(query, max_results=3)
+            if not results:
+                print(f"  ⚠️  No results for '{query}'")
+            else:
                 search_results.extend(results)
-            except Exception as e:
-                print(f"  ⚠️  Search failed for '{query}': {e}")
-                continue
 
         # Check if we got ANY results
         if not search_results:
@@ -237,24 +293,20 @@ Focus on numbers. If you see ranges, use the midpoint. If data is for a year oth
 
         search_term = self._simplify_industry_name(industry_name)
 
+        # Reduced from 4 to 3 queries to minimize rate limiting
         queries = [
             f"top companies in {search_term}",
-            f"{search_term} market leaders competitors",
-            f"{search_term} industry fragmented or concentrated",
+            f"{search_term} market leaders",
             f"biggest {search_term} companies"
         ]
 
         search_results = []
         for query in queries:
-            try:
-                results = list(self.ddg.text(query, max_results=3))
-                if not results:
-                    print(f"  ⚠️  No results for '{query}'")
-                    continue
+            results = self._search_with_retry(query, max_results=3)
+            if not results:
+                print(f"  ⚠️  No results for '{query}'")
+            else:
                 search_results.extend(results)
-            except Exception as e:
-                print(f"  ⚠️  Search failed: {e}")
-                continue
 
         # Check if we got ANY results
         if not search_results:
@@ -306,25 +358,20 @@ If you can't find HHI, estimate based on market structure descriptions."""
 
         search_term = self._simplify_industry_name(industry_name)
 
+        # Reduced from 5 to 3 queries to minimize rate limiting
         queries = [
             f"what software do {search_term} companies use",
-            f"{search_term} biggest challenges problems",
-            f"{search_term} pain points inefficiencies",
-            f"technology adoption in {search_term}",
-            f"manual processes in {search_term}"
+            f"{search_term} biggest challenges",
+            f"{search_term} pain points"
         ]
 
         search_results = []
         for query in queries:
-            try:
-                results = list(self.ddg.text(query, max_results=3))
-                if not results:
-                    print(f"  ⚠️  No results for '{query}'")
-                    continue
+            results = self._search_with_retry(query, max_results=3)
+            if not results:
+                print(f"  ⚠️  No results for '{query}'")
+            else:
                 search_results.extend(results)
-            except Exception as e:
-                print(f"  ⚠️  Search failed: {e}")
-                continue
 
         # Check if we got ANY results
         if not search_results:

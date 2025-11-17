@@ -109,13 +109,13 @@ class IndustryAnalyzer:
             # Store research in vector DB
             self.db.add_research(
                 state['naics_code'],
-                f"Industry: {research_data.get('industry_name')}. "
-                f"Market: ${research_data.get('market_size_usd', 0)/1e9:.1f}B, "
-                f"growth {research_data.get('growth_rate', 0)*100:.1f}%. "
-                f"Pain points: {', '.join([p.get('pain', '') for p in research_data.get('pain_points', [])[:3]])}",
+                f"Industry: {research_data.get('industry_name', 'Unknown')}. "
+                f"Market: ${(research_data.get('market_size_usd') or 0)/1e9:.1f}B, "
+                f"growth {(research_data.get('growth_rate') or 0)*100:.1f}%. "
+                f"Pain points: {', '.join([p.get('pain', '') for p in (research_data.get('pain_points') or [])[:3]])}",
                 {
                     'phase': 'research',
-                    'confidence': research_data.get('confidence', 0.5)
+                    'confidence': research_data.get('confidence') or 0.5
                 }
             )
 
@@ -133,8 +133,8 @@ class IndustryAnalyzer:
             state['strategic_data'] = strategic_data
 
             # Store strategic insights in vector DB
-            porters = strategic_data.get('porters_five_forces', {})
-            positioning = strategic_data.get('strategic_positioning', {})
+            porters = strategic_data.get('porters_five_forces') or {}
+            positioning = strategic_data.get('strategic_positioning') or {}
 
             insight_text = f"Porter's: {porters.get('strategic_verdict', '')}. " \
                           f"Best positioning: {positioning.get('best_positioning', '')}. " \

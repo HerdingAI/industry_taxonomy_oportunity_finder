@@ -230,7 +230,7 @@ class DatabaseManager:
             'hhi_index': data.get('hhi_index'),
             'digital_maturity_score': data.get('digital_maturity_score'),
             'overall_score': data.get('overall_score'),
-            'analysis_date': datetime.now(),
+            'analysis_date': datetime.now().isoformat(),
             'data_confidence': data.get('confidence', 0.5)
         })
 
@@ -274,7 +274,7 @@ class DatabaseManager:
             data.get('competitive_threat'),
             json.dumps(data.get('risk_factors', [])),
             data.get('expected_value_y5_usd'),
-            datetime.now()
+            datetime.now().isoformat()
         ))
 
         self.conn.commit()
