@@ -1,6 +1,25 @@
 # Environment and secrets
 .env
+.env.*
 *.env
+!.env.example
+.envrc
+secrets/
+*.key
+*.pem
+*.cert
+
+# API Keys and Credentials (extra protection)
+*api_key*
+*apikey*
+*secret*
+*password*
+*credentials*
+# But allow these specific files
+!requirements.txt
+!.gitignore
+!*.md
+!*.py
 
 # Python
 __pycache__/
@@ -51,6 +70,7 @@ data/
 !USER_TESTING_FIXES.md
 !ADDITIONAL_FIXES_APPLIED.md
 !FINAL_FIXES_DOCUMENTATION.md
+!SECURITY_AUDIT.md
 
 # OS
 .DS_Store
