@@ -37,12 +37,16 @@ wheels/
 # Output files
 outputs/
 reports/
+data/
 *.json
 *.md
 !README.md
 !QUICKSTART.md
 !ARCHITECTURE_PROPOSAL.md
 !COMPARISON.md
+!MVP_DESIGN.md
+!BUGS_FOUND.md
+!PRIORITY_1_FIXES.md
 
 # OS
 .DS_Store

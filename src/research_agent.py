@@ -26,31 +26,64 @@ class ResearchAgent:
 
         print(f"🔍 Researching NAICS {naics_code}...")
 
-        # Step 1: Get NAICS definition if not provided
-        if not industry_name:
-            industry_name = self._get_naics_definition(naics_code)
+        try:
+            # Step 1: Get NAICS definition if not provided
+            if not industry_name:
+                try:
+                    industry_name = self._get_naics_definition(naics_code)
+                except Exception as e:
+                    print(f"  ⚠️  Could not fetch industry name: {e}")
+                    industry_name = f"Industry {naics_code}"  # Fallback
 
-        # Step 2: Gather market data through targeted searches
-        market_data = self._gather_market_data(naics_code, industry_name)
+            # Step 2: Gather market data through targeted searches
+            market_data = self._gather_market_data(naics_code, industry_name)
 
-        # Step 3: Research competitive landscape
-        competitive_data = self._research_competition(naics_code, industry_name)
+            # Step 3: Research competitive landscape
+            competitive_data = self._research_competition(naics_code, industry_name)
 
-        # Step 4: Identify technology stack and pain points
-        tech_and_pain = self._research_tech_and_pain(naics_code, industry_name)
+            # Step 4: Identify technology stack and pain points
+            tech_and_pain = self._research_tech_and_pain(naics_code, industry_name)
 
-        # Step 5: Consolidate and structure findings
-        consolidated = self._consolidate_findings(
-            naics_code,
-            industry_name,
-            market_data,
-            competitive_data,
-            tech_and_pain
-        )
+            # Step 5: Consolidate and structure findings
+            consolidated = self._consolidate_findings(
+                naics_code,
+                industry_name,
+                market_data,
+                competitive_data,
+                tech_and_pain
+            )
 
-        print(f"✅ Research complete (confidence: {consolidated.get('confidence', 0):.0%})")
+            print(f"✅ Research complete (confidence: {consolidated.get('confidence', 0):.0%})")
 
-        return consolidated
+            return consolidated
+
+        except Exception as e:
+            print(f"  ⚠️  Research encountered errors: {e}")
+            # Return minimal valid structure to allow pipeline to continue
+            return {
+                'naics_code': naics_code,
+                'industry_name': industry_name or f"Industry {naics_code}",
+                'market_size_usd': None,
+                'growth_rate': None,
+                'establishments': None,
+                'employment': None,
+                'avg_wage': None,
+                'market_concentration': 'unknown',
+                'hhi_index': None,
+                'top_players': [],
+                'market_share_top_3': None,
+                'competitive_dynamics': 'Unable to assess',
+                'barriers_to_entry': 'unknown',
+                'common_tools': [],
+                'digital_maturity': 'unknown',
+                'tech_spend_per_employee': None,
+                'pain_points': [],
+                'manual_processes': [],
+                'key_trends': [],
+                'confidence': 0.1,
+                'sources': [],
+                'research_timestamp': None
+            }
 
     def _get_naics_definition(self, naics_code: str) -> str:
         """Get official NAICS industry definition"""
@@ -88,10 +121,17 @@ Return ONLY the industry name, nothing else."""
         for query in queries:
             try:
                 results = list(self.ddg.text(query, max_results=3))
+                if not results:
+                    print(f"  ⚠️  No results for '{query}'")
+                    continue
                 search_results.extend(results)
             except Exception as e:
                 print(f"  ⚠️  Search failed for '{query}': {e}")
                 continue
+
+        # Check if we got ANY results
+        if not search_results:
+            print(f"  ⚠️  No search results found. Using LLM knowledge (lower confidence).")
 
         # Extract structured data from search results
         context = self._format_search_results(search_results)
@@ -136,10 +176,17 @@ Focus on numbers. If you see ranges, use the midpoint. If data is for a year oth
         for query in queries:
             try:
                 results = list(self.ddg.text(query, max_results=3))
+                if not results:
+                    print(f"  ⚠️  No results for '{query}'")
+                    continue
                 search_results.extend(results)
             except Exception as e:
                 print(f"  ⚠️  Search failed: {e}")
                 continue
+
+        # Check if we got ANY results
+        if not search_results:
+            print(f"  ⚠️  No search results found. Using LLM knowledge (lower confidence).")
 
         context = self._format_search_results(search_results)
 
@@ -182,10 +229,17 @@ If you can't find HHI, estimate based on market structure descriptions."""
         for query in queries:
             try:
                 results = list(self.ddg.text(query, max_results=3))
+                if not results:
+                    print(f"  ⚠️  No results for '{query}'")
+                    continue
                 search_results.extend(results)
             except Exception as e:
                 print(f"  ⚠️  Search failed: {e}")
                 continue
+
+        # Check if we got ANY results
+        if not search_results:
+            print(f"  ⚠️  No search results found. Using LLM knowledge (lower confidence).")
 
         context = self._format_search_results(search_results)
 

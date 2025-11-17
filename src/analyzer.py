@@ -30,6 +30,7 @@ class AnalysisState(TypedDict):
 
     # Metadata
     error: str
+    error_count: int
     completed: bool
 
 
@@ -300,6 +301,7 @@ class IndustryAnalyzer:
             'quantitative_data': {},
             'final_report': '',
             'error': '',
+            'error_count': 0,
             'completed': False
         }
 

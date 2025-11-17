@@ -18,7 +18,7 @@ class DatabaseManager:
 
     def __init__(self, db_dir: str = "data"):
         self.db_dir = Path(db_dir)
-        self.db_dir.mkdir(exist_ok=True)
+        self.db_dir.mkdir(parents=True, exist_ok=True)
 
         # SQLite for structured data
         self.sql_path = self.db_dir / "intelligence.db"
