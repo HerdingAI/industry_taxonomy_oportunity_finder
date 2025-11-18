@@ -20,13 +20,24 @@ class SynthesizerAgent:
         self,
         research: Dict[str, Any],
         strategic: Dict[str, Any],
-        quantitative: Dict[str, Any]
+        quantitative: Dict[str, Any],
+        customer_analysis: Dict[str, Any] = None,
+        automation_analysis: Dict[str, Any] = None,
+        report_format: str = "comprehensive"
     ) -> str:
         """
         Create final report - max 2-3 pages, all signal, no noise
+
+        Args:
+            research: Research agent output
+            strategic: Strategic agent output
+            quantitative: Quantitative agent output
+            customer_analysis: Product Manager agent output (optional)
+            automation_analysis: Technical Data Scientist agent output (optional)
+            report_format: "comprehensive" (default) or "business_model" (CLIENT/SERVICE/VALUE/REVENUE/MOAT)
         """
 
-        print(f"📄 Synthesizing final report...")
+        print(f"📄 Synthesizing final report ({report_format} format)...")
 
         naics_code = research.get('naics_code')
         industry_name = research.get('industry_name')
@@ -35,21 +46,33 @@ class SynthesizerAgent:
         opportunities = quantitative.get('opportunities', [])
         top_opp = opportunities[0] if opportunities else None
 
-        # Generate concise report
-        report = self._generate_report(research, strategic, quantitative, top_opp)
+        # Generate report based on format
+        if report_format == "business_model":
+            report = self._generate_business_model_report(
+                research, strategic, quantitative,
+                customer_analysis, automation_analysis, top_opp
+            )
+        else:
+            # Enhanced comprehensive report with new data
+            report = self._generate_comprehensive_report(
+                research, strategic, quantitative,
+                customer_analysis, automation_analysis, top_opp
+            )
 
         print(f"✅ Report complete ({len(report)} chars)")
 
         return report
 
-    def _generate_report(
+    def _generate_comprehensive_report(
         self,
         research: Dict,
         strategic: Dict,
         quant: Dict,
-        top_opp: Dict
+        customer_analysis: Dict = None,
+        automation_analysis: Dict = None,
+        top_opp: Dict = None
     ) -> str:
-        """Generate insight-dense markdown report"""
+        """Generate comprehensive insight-dense markdown report"""
 
         naics_code = research.get('naics_code')
         industry_name = research.get('industry_name')
@@ -88,6 +111,258 @@ class SynthesizerAgent:
 
 ---
 *Analysis confidence: {confidence:.0%} | Data sources: Web search, industry databases*
+"""
+
+        return report
+
+    def _generate_business_model_report(
+        self,
+        research: Dict,
+        strategic: Dict,
+        quant: Dict,
+        customer_analysis: Dict = None,
+        automation_analysis: Dict = None,
+        top_opp: Dict = None
+    ) -> str:
+        """
+        Generate business model report in CLIENT/SERVICE/VALUE PROP/REVENUE/MOAT format
+
+        This is the format requested by user for final opportunity presentation
+        """
+        naics_code = research.get('naics_code')
+        industry_name = research.get('industry_name')
+
+        # Extract data
+        vc_assessment = quant.get('vc_criteria_assessment', {})
+        staleness = strategic.get('staleness_audit', {})
+
+        # Get buyer personas from customer analysis
+        personas = []
+        if customer_analysis:
+            personas = customer_analysis.get('buyer_personas', [])
+
+        # Get top automation opportunities
+        top_workflows = []
+        if automation_analysis:
+            top_opps = automation_analysis.get('top_opportunities', [])
+            top_workflows = [opp.get('workflow_name') for opp in top_opps[:3]]
+
+        report = f"""# Business Opportunity: {industry_name}
+
+**NAICS**: {naics_code} | **VC Score**: {vc_assessment.get('overall_vc_score', 0):.1f}/100 ({vc_assessment.get('tier', 'Unknown')})
+
+---
+
+## 🎯 CLIENT
+
+**Who Pays Us**:
+"""
+
+        # Add buyer personas
+        if personas:
+            for i, persona in enumerate(personas[:2], 1):
+                role = persona.get('role', 'Unknown Role')
+                authority = persona.get('decision_authority', 'unknown')
+                report += f"\n{i}. **{role}** ({authority})\n"
+                report += f"   - Goals: {', '.join(persona.get('primary_goals', [])[:3])}\n"
+                report += f"   - Pain Points: {', '.join(persona.get('pain_points', [])[:3])}\n"
+        else:
+            report += "\n*Insufficient customer data - conduct VOC research*\n"
+
+        report += f"""
+
+---
+
+## 💼 SERVICE
+
+**What We Automate/Provide**:
+"""
+
+        # Add top workflows/services
+        if top_workflows:
+            for i, workflow in enumerate(top_workflows, 1):
+                report += f"\n{i}. {workflow}\n"
+        elif top_opp:
+            report += f"\n1. {top_opp.get('opportunity_title', 'Unknown')}\n"
+            report += f"   - {top_opp.get('opportunity_description', '')}\n"
+        else:
+            report += "\n*No specific automation opportunities identified*\n"
+
+        # Add technology approach
+        if automation_analysis and automation_analysis.get('top_opportunities'):
+            top_auto_opp = automation_analysis['top_opportunities'][0]
+            report += f"\n**Technical Approach**: {top_auto_opp.get('recommended_approach', 'GenAI-powered automation')}\n"
+
+        report += f"""
+
+---
+
+## 🎁 VALUE PROPOSITION
+
+**Why They Switch**:
+"""
+
+        # Staleness indicators
+        if staleness.get('data_available') and staleness.get('staleness_score', 0) > 50:
+            staleness_score = staleness.get('staleness_score')
+            indicators = staleness.get('staleness_indicators', [])
+            report += f"\n**Incumbent Weakness** (Staleness: {staleness_score:.0f}/100):\n"
+            for ind in indicators[:3]:
+                report += f"- {ind.get('keyword')}: {ind.get('mentions')} mentions\n"
+            report += "\n"
+
+        # Pain point value prop
+        if customer_analysis:
+            pain_analysis = customer_analysis.get('pain_point_analysis', {})
+            top_pains = pain_analysis.get('top_pain_points', [])
+            if top_pains:
+                report += f"**Customer Pain Relief**:\n"
+                for pain in top_pains[:2]:
+                    category = pain.get('category', 'Unknown')
+                    keywords = ', '.join(pain.get('keywords', [])[:3])
+                    report += f"- {category}: {keywords}\n"
+                report += "\n"
+
+        # Automation ROI value
+        if automation_analysis and automation_analysis.get('total_annual_roi_potential_usd'):
+            roi = automation_analysis['total_annual_roi_potential_usd']
+            report += f"**Quantified Value**: ${roi:,.0f} annual savings potential per customer\n\n"
+
+        # Strategic positioning
+        positioning = strategic.get('strategic_positioning', {})
+        if positioning.get('best_positioning'):
+            report += f"**Positioning**: {positioning.get('best_positioning')}\n"
+
+        report += f"""
+
+---
+
+## 💰 REVENUE MODEL
+
+**How We Charge**:
+"""
+
+        # Unit economics from top opportunity
+        if top_opp:
+            unit_econ = top_opp.get('unit_economics', {})
+            market_sizing = top_opp.get('market_sizing', {})
+
+            report += f"\n**Pricing**:\n"
+            report += f"- ARPU: ${unit_econ.get('arpu', 0):,.0f}/year\n"
+            report += f"- Gross Margin: {unit_econ.get('gross_margin', 0):.0%}\n"
+            report += f"- LTV: ${unit_econ.get('ltv', 0):,.0f}\n"
+            report += f"- CAC: ${unit_econ.get('cac', 0):,.0f}\n"
+            report += f"- LTV/CAC: {unit_econ.get('ltv_cac_ratio', 0):.1f}x\n"
+            report += f"- Payback: {unit_econ.get('payback_months', 0):.0f} months\n\n"
+
+            report += f"**Market Sizing**:\n"
+            report += f"- TAM: ${market_sizing.get('tam_usd', 0):,.0f}\n"
+            report += f"- SAM: ${market_sizing.get('sam_usd', 0):,.0f}\n"
+            report += f"- SOM (Y3): ${market_sizing.get('som_y3_usd', 0):,.0f}\n\n"
+
+            assumptions = market_sizing.get('assumptions', [])
+            if assumptions:
+                report += f"**Key Assumptions**:\n"
+                for assumption in assumptions[:3]:
+                    report += f"- {assumption}\n"
+        else:
+            report += "\n*Conduct detailed opportunity analysis for unit economics*\n"
+
+        report += f"""
+
+---
+
+## 🏰 COMPETITIVE MOAT
+
+**Why Defensible**:
+"""
+
+        # Defensibility from strategic rationale
+        if top_opp:
+            rationale = top_opp.get('strategic_rationale', {})
+            report += f"\n**Primary Moat**: {rationale.get('key_moat', 'Unknown')}\n\n"
+            report += f"**Why Now**: {rationale.get('why_now', 'Unknown')}\n\n"
+            report += f"**Why Unsolved**: {rationale.get('why_unsolved', 'Unknown')}\n\n"
+
+        # VC criteria strengths
+        strengths = vc_assessment.get('strengths', [])
+        if strengths:
+            report += f"**VC Strengths**:\n"
+            for strength in strengths:
+                report += f"- {strength}\n"
+
+        # Competitive threat
+        if top_opp:
+            threat = top_opp.get('strategic_rationale', {}).get('competitive_threat', 'Unknown')
+            report += f"\n**Competitive Threat**: {threat}\n"
+
+        report += f"""
+
+---
+
+## ⚠️ PRE-MORTEM: Why This Might NOT Work
+
+"""
+
+        # Pre-mortem from top opportunity
+        if top_opp and top_opp.get('pre_mortem'):
+            premortem = top_opp['pre_mortem']
+            most_likely = premortem.get('most_likely_failure', 'Unknown')
+            survival_prob = premortem.get('survival_probability_y3', 0.5)
+
+            report += f"**Most Likely Failure**: {most_likely}\n\n"
+            report += f"**Survival Probability (Y3)**: {survival_prob:.0%}\n\n"
+
+            failure_scenarios = premortem.get('failure_scenarios', [])
+            if failure_scenarios:
+                report += f"**Top Failure Scenarios**:\n\n"
+                for i, scenario in enumerate(failure_scenarios[:3], 1):
+                    report += f"{i}. **{scenario.get('scenario')}** (p={scenario.get('probability', 0):.0%}, impact={scenario.get('impact')})\n"
+                    report += f"   - Root Cause: {scenario.get('root_cause')}\n"
+                    report += f"   - Mitigation: {scenario.get('mitigation')}\n\n"
+
+            derisking = premortem.get('derisking_priorities', [])
+            if derisking:
+                report += f"**Derisking Priorities**:\n"
+                for priority in derisking[:3]:
+                    report += f"- {priority}\n"
+
+        report += f"""
+
+---
+
+## 📊 VC Investment Criteria Assessment
+
+"""
+
+        # VC criteria detailed breakdown
+        criteria_scores = vc_assessment.get('criteria_scores', {})
+        report += f"**Overall VC Score**: {vc_assessment.get('overall_vc_score', 0):.1f}/100\n\n"
+
+        report += f"| Criterion | Score | Weight |\n"
+        report += f"|-----------|-------|--------|\n"
+        weights = vc_assessment.get('weights', {})
+        report += f"| TAM | {criteria_scores.get('tam_score', 0):.1f}/100 | {weights.get('tam', 0):.0%} |\n"
+        report += f"| Growth | {criteria_scores.get('growth_score', 0):.1f}/100 | {weights.get('growth', 0):.0%} |\n"
+        report += f"| Fragmentation | {criteria_scores.get('fragmentation_score', 0):.1f}/100 | {weights.get('fragmentation', 0):.0%} |\n"
+        report += f"| Staleness | {criteria_scores.get('incumbent_staleness_score', 0):.1f}/100 | {weights.get('staleness', 0):.0%} |\n"
+        report += f"| Pain Intensity | {criteria_scores.get('pain_intensity_score', 0):.1f}/100 | {weights.get('pain_intensity', 0):.0%} |\n"
+        report += f"| Defensibility | {criteria_scores.get('defensibility_score', 0):.1f}/100 | {weights.get('defensibility', 0):.0%} |\n\n"
+
+        report += f"**Verdict**: {vc_assessment.get('verdict', 'Unknown')}\n\n"
+
+        # Weaknesses
+        weaknesses = vc_assessment.get('weaknesses', [])
+        if weaknesses:
+            report += f"**Key Weaknesses**:\n"
+            for weakness in weaknesses:
+                report += f"- {weakness}\n"
+
+        report += f"""
+
+---
+
+*Data Confidence: {research.get('confidence', 0.5):.0%} | Analysis Date: {research.get('research_timestamp', 'N/A')}*
 """
 
         return report
