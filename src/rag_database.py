@@ -187,7 +187,7 @@ class RAGDatabase:
             cursor.execute("""
                 SELECT * FROM get_recent_funding(
                     naics_code := %s,
-                    since_date := CURRENT_DATE - INTERVAL '%s months'
+                    since_date := CURRENT_DATE - make_interval(months => %s)
                 )
             """, (naics_code, months_back))
 

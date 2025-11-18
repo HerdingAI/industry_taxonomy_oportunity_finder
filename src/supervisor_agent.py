@@ -384,17 +384,23 @@ class SupervisorAgent:
         top_pain_points = phase_1_results.get('top_pain_points', [])
         if top_pain_points:
             targets['pain_points'] = [
-                f'site:reddit.com "{naics_code} {pain}" complaints',
-                f'site:g2.com "{pain}" reviews'
+                query
                 for pain in top_pain_points[:2]
+                for query in [
+                    f'site:reddit.com "{naics_code} {pain}" complaints',
+                    f'site:g2.com "{pain}" reviews'
+                ]
             ]
 
         top_workflows = phase_1_results.get('top_workflows', [])
         if top_workflows:
             targets['workflows'] = [
-                f'"{workflow}" automation opportunity',
-                f'"{workflow}" manual process pain points'
+                query
                 for workflow in top_workflows[:2]
+                for query in [
+                    f'"{workflow}" automation opportunity',
+                    f'"{workflow}" manual process pain points'
+                ]
             ]
 
         strategy['specific_targets'] = targets
