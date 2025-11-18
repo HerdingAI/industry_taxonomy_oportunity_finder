@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test script to verify the setup is working correctly
+Test script to verify the 7-agent MBA-Data Science system is working correctly
 """
 
 import os
@@ -12,30 +12,50 @@ def test_dependencies():
     print("🔍 Checking dependencies...")
 
     required_packages = [
-        'langgraph',
-        'langchain',
-        'langchain_openai',
-        'dotenv',
-        'requests',
-        'pydantic'
+        ('langgraph', 'langgraph'),
+        ('langchain', 'langchain'),
+        ('langchain_openai', 'langchain-openai'),
+        ('dotenv', 'python-dotenv'),
+        ('chromadb', 'chromadb'),
+        ('duckduckgo_search', 'duckduckgo-search'),
+    ]
+
+    optional_packages = [
+        ('psycopg2', 'psycopg2-binary'),
+        ('openai', 'openai'),
     ]
 
     missing = []
+    missing_optional = []
 
-    for package in required_packages:
+    for package, pip_name in required_packages:
         try:
             __import__(package)
             print(f"  ✅ {package}")
         except ImportError:
             print(f"  ❌ {package} - NOT INSTALLED")
-            missing.append(package)
+            missing.append(pip_name)
+
+    print("\n🔍 Checking optional dependencies (for RAG features)...")
+    for package, pip_name in optional_packages:
+        try:
+            __import__(package)
+            print(f"  ✅ {package}")
+        except ImportError:
+            print(f"  ⚠️  {package} - NOT INSTALLED (optional)")
+            missing_optional.append(pip_name)
 
     if missing:
-        print(f"\n❌ Missing packages: {', '.join(missing)}")
+        print(f"\n❌ Missing required packages: {', '.join(missing)}")
         print("Run: pip install -r requirements.txt")
         return False
 
-    print("✅ All dependencies installed")
+    if missing_optional:
+        print(f"\n⚠️  Missing optional packages: {', '.join(missing_optional)}")
+        print("System will run in web-search-only mode (no RAG features)")
+        print("To enable RAG: pip install " + " ".join(missing_optional))
+
+    print("✅ All required dependencies installed")
     return True
 
 
@@ -65,21 +85,42 @@ def test_env_config():
     model = os.getenv("OPENROUTER_MODEL", "openrouter/sherlock-think-alpha")
     print(f"  ✅ Model: {model}")
 
+    # Check for optional RAG database config
+    pg_host = os.getenv("PG_HOST")
+    if pg_host:
+        print(f"  ✅ PostgreSQL configured (host: {pg_host})")
+    else:
+        print(f"  ⚠️  PostgreSQL not configured (RAG features disabled)")
+
     return True
 
 
 def test_analyzer_import():
-    """Test if the analyzer can be imported"""
-    print("\n🔍 Testing analyzer import...")
+    """Test if the 7-agent analyzer can be imported"""
+    print("\n🔍 Testing 7-agent analyzer import...")
 
     try:
-        from naics_analyzer import NAICSAnalyzer
-        print("  ✅ NAICSAnalyzer imported successfully")
+        from src.analyzer import IndustryAnalyzer
+        print("  ✅ IndustryAnalyzer imported successfully")
+
+        # Check API key
+        load_dotenv()
+        api_key = os.getenv("OPENROUTER_API_KEY")
+        if not api_key or api_key == "your_openrouter_api_key_here":
+            print("  ⚠️  Skipping initialization (API key not configured)")
+            return True
 
         # Try to initialize
-        analyzer = NAICSAnalyzer()
+        analyzer = IndustryAnalyzer(api_key)
         print("  ✅ Analyzer initialized successfully")
 
+        # Check RAG database status
+        if analyzer.rag_db:
+            print("  ✅ RAG database connected (full features available)")
+        else:
+            print("  ⚠️  RAG database not available (web-search-only mode)")
+
+        analyzer.close()
         return True
 
     except Exception as e:
@@ -102,16 +143,32 @@ def test_output_directory():
         return False
 
 
+def test_data_directory():
+    """Check if data directory exists for local databases"""
+    print("\n🔍 Checking data directory...")
+
+    data_dir = "data"
+
+    try:
+        os.makedirs(data_dir, exist_ok=True)
+        print(f"  ✅ Data directory ready: {data_dir}/")
+        return True
+    except Exception as e:
+        print(f"  ❌ Cannot create data directory: {str(e)}")
+        return False
+
+
 def main():
     print("="*60)
-    print("NAICS Analyzer - Setup Test")
+    print("7-Agent MBA-Data Science System - Setup Test")
     print("="*60)
 
     tests = [
         ("Dependencies", test_dependencies),
         ("Environment Config", test_env_config),
         ("Analyzer Import", test_analyzer_import),
-        ("Output Directory", test_output_directory)
+        ("Output Directory", test_output_directory),
+        ("Data Directory", test_data_directory),
     ]
 
     results = []
@@ -142,6 +199,8 @@ def main():
         print("\n🎉 All tests passed! You're ready to start analyzing.")
         print("\nTry running:")
         print("  python run_analysis.py 541511")
+        print("\nOr for a comprehensive test:")
+        print("  python test_without_rag.py")
         return 0
     else:
         print("\n⚠️  Some tests failed. Please fix the issues above.")
