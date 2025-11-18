@@ -57,12 +57,19 @@ class QuantitativeAnalyst:
 
         # Score each opportunity
         scored_opportunities = []
-        for opp in value_chain_opps[:5]:  # Top 5 only
+        total_opps = min(len(value_chain_opps), 5)
+        for i, opp in enumerate(value_chain_opps[:5], 1):  # Top 5 only
+            print(f"  Scoring opportunity {i}/{total_opps}: {opp.get('activity', 'Unknown')[:50]}...")
             scored = self._score_opportunity(opp, research_data, strategic_data)
             if scored:
+                score = scored.get('risk_adjusted_score', 0)
+                print(f"  ✅ Score: {score:.1f}/100")
                 # Add pre-mortem analysis
+                print(f"  Running pre-mortem analysis...")
                 scored['pre_mortem'] = self._pre_mortem_analysis(scored, research_data, strategic_data)
                 scored_opportunities.append(scored)
+            else:
+                print(f"  ⚠️  Scoring failed, skipping opportunity")
 
         # Rank opportunities
         scored_opportunities.sort(key=lambda x: x.get('risk_adjusted_score', 0), reverse=True)

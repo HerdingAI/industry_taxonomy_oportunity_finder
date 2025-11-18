@@ -41,15 +41,21 @@ class StrategicAnalyst:
         industry_name = research_data['industry_name']
 
         # Porter's Five Forces Analysis
+        print(f"  Analyzing Porter's Five Forces...")
         porters = self._analyze_porters_forces(research_data)
+        print(f"  ✅ Attractiveness: {porters.get('overall_attractiveness', 0)}/100")
 
         # Strategic positioning
+        print(f"  Analyzing strategic positioning...")
         positioning = self._analyze_positioning(research_data, porters)
 
         # Value chain opportunities
+        print(f"  Identifying value chain opportunities...")
         value_chain = self._analyze_value_chain(research_data)
+        print(f"  ✅ Found {len(value_chain)} opportunities")
 
         # Staleness Audit (Phase II of new methodology)
+        print(f"  Running staleness audit...")
         staleness_audit = self._staleness_audit(naics_code, industry_name, research_data)
 
         consolidated = {
