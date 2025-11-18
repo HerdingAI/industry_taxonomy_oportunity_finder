@@ -11,6 +11,7 @@ from langgraph.graph import StateGraph, END
 from langchain_openai import ChatOpenAI
 
 from .database import DatabaseManager
+from .audit_database import AuditDatabase
 from .rag_database import RAGDatabase
 from .research_agent import ResearchAgent
 from .strategic_agent import StrategicAnalyst
@@ -26,6 +27,7 @@ class AnalysisState(TypedDict):
     naics_code: str
     industry_name: str
     phase: str  # "PHASE_1" or "PHASE_2"
+    run_id: str  # Audit trail identifier
 
     # Agent outputs
     research_data: Dict[str, Any]
@@ -70,6 +72,7 @@ class IndustryAnalyzer:
 
         # Initialize databases
         self.db = DatabaseManager(db_dir)
+        self.audit_db = AuditDatabase(db_dir)
 
         # Initialize RAG database (optional - gracefully handles if not configured)
         try:
@@ -78,6 +81,9 @@ class IndustryAnalyzer:
         except Exception as e:
             print(f"⚠️  RAG database not available: {e}")
             self.rag_db = None
+
+        # Store model name for audit logging
+        self.model_name = model
 
         # Initialize agents (pass RAG database where needed)
         self.research_agent = ResearchAgent(self.llm, rag_db=self.rag_db)
@@ -143,6 +149,13 @@ class IndustryAnalyzer:
                     'phase': 'research',
                     'confidence': research_data.get('confidence') or 0.5
                 }
+            )
+
+            # Save audit snapshot
+            self.audit_db.save_snapshot(
+                run_id=state.get('run_id'),
+                snapshot_type='research_complete',
+                data=research_data
             )
 
         except Exception as e:
@@ -220,6 +233,13 @@ class IndustryAnalyzer:
                 'strategic_analysis'
             )
 
+            # Save audit snapshot
+            self.audit_db.save_snapshot(
+                run_id=state.get('run_id'),
+                snapshot_type='strategic_complete',
+                data=strategic_data
+            )
+
         except Exception as e:
             print(f"❌ Strategic analysis failed: {e}")
             state['error'] = f"Strategic error: {str(e)}"
@@ -237,6 +257,13 @@ class IndustryAnalyzer:
                 automation_analysis=state.get('automation_analysis')
             )
             state['quantitative_data'] = quant_data
+
+            # Save audit snapshot
+            self.audit_db.save_snapshot(
+                run_id=state.get('run_id'),
+                snapshot_type='quantitative_complete',
+                data=quant_data
+            )
 
         except Exception as e:
             print(f"❌ Quantitative analysis failed: {e}")
@@ -383,6 +410,14 @@ class IndustryAnalyzer:
         print(f"🚀 NAICS {naics_code} Analysis Starting ({phase})")
         print(f"{'='*60}\n")
 
+        # Start audit tracking
+        run_id = self.audit_db.start_analysis_run(
+            naics_code=naics_code,
+            industry_name=industry_name,
+            phase=phase,
+            model_name=self.model_name
+        )
+
         start_time = datetime.now()
 
         # Initialize state
@@ -390,6 +425,7 @@ class IndustryAnalyzer:
             'naics_code': naics_code,
             'industry_name': industry_name or '',
             'phase': phase,
+            'run_id': run_id,
             'research_data': {},
             'strategic_data': {},
             'quantitative_data': {},
@@ -401,22 +437,64 @@ class IndustryAnalyzer:
             'completed': False
         }
 
-        # Run workflow
-        final_state = self.workflow.invoke(initial_state)
+        try:
+            # Run workflow
+            final_state = self.workflow.invoke(initial_state)
 
-        duration = (datetime.now() - start_time).total_seconds()
+            # Save final snapshot
+            self.audit_db.save_snapshot(
+                run_id=run_id,
+                snapshot_type='final_state',
+                data=final_state
+            )
 
-        print(f"\n{'='*60}")
-        error_count = final_state.get('error_count', 0)
-        if error_count > 0:
-            print(f"⚠️  Analysis completed with {error_count} error(s) in {duration:.1f}s")
-            if error_count >= 3:
-                print(f"❌ WARNING: High error count ({error_count}) - results may be unreliable")
-        else:
-            print(f"✅ Analysis completed successfully in {duration:.1f}s")
-        print(f"{'='*60}\n")
+            duration = (datetime.now() - start_time).total_seconds()
 
-        return final_state
+            # End audit tracking
+            self.audit_db.end_analysis_run(
+                run_id=run_id,
+                completed=True,
+                error_count=final_state.get('error_count', 0),
+                final_error=final_state.get('error')
+            )
+
+            print(f"\n{'='*60}")
+            error_count = final_state.get('error_count', 0)
+            if error_count > 0:
+                print(f"⚠️  Analysis completed with {error_count} error(s) in {duration:.1f}s")
+                if error_count >= 3:
+                    print(f"❌ WARNING: High error count ({error_count}) - results may be unreliable")
+            else:
+                print(f"✅ Analysis completed successfully in {duration:.1f}s")
+
+            # Print audit summary
+            summary = self.audit_db.get_run_summary(run_id)
+            print(f"📊 Audit: {summary['llm_stats']['count']} LLM calls, {summary['search_stats']['count']} searches, ${summary['llm_stats']['total_cost']:.3f} cost")
+            print(f"💾 Audit trail: {run_id}")
+            print(f"{'='*60}\n")
+
+            return final_state
+
+        except Exception as e:
+            # Log the error
+            import traceback
+            self.audit_db.log_error(
+                run_id=run_id,
+                agent_name='analyzer',
+                error_type=type(e).__name__,
+                error_message=str(e),
+                stack_trace=traceback.format_exc()
+            )
+
+            # End audit tracking with failure
+            self.audit_db.end_analysis_run(
+                run_id=run_id,
+                completed=False,
+                error_count=99,
+                final_error=str(e)
+            )
+
+            raise
 
     def save_report(self, analysis_result: Dict[str, Any], output_dir: str = "outputs") -> str:
         """Save markdown report to file"""
@@ -446,9 +524,22 @@ class IndustryAnalyzer:
         """Search for similar opportunities using vector search"""
         return self.db.search_similar_opportunities(query, top_k)
 
+    def get_run_summary(self, run_id: str) -> dict:
+        """Get audit summary for a specific run"""
+        return self.audit_db.get_run_summary(run_id)
+
+    def get_cost_summary(self, start_date: str = None) -> dict:
+        """Get cost summary across all runs"""
+        return self.audit_db.get_cost_summary(start_date)
+
+    def export_run_data(self, run_id: str, output_file: str):
+        """Export complete run data to JSON file"""
+        self.audit_db.export_run_data(run_id, output_file)
+
     def close(self):
         """Close database connections"""
         self.db.close()
+        self.audit_db.close()
 
 
 if __name__ == "__main__":
