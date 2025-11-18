@@ -18,9 +18,24 @@ Usage:
 import os
 from typing import List, Dict, Any, Optional
 from contextlib import contextmanager
-import psycopg2
-from psycopg2.extras import RealDictCursor
-import openai
+
+# Optional imports - gracefully handle if not installed
+try:
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+    PSYCOPG2_AVAILABLE = True
+except ImportError:
+    PSYCOPG2_AVAILABLE = False
+    psycopg2 = None
+    RealDictCursor = None
+
+try:
+    import openai
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+    openai = None
+
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -32,6 +47,19 @@ class RAGDatabase:
 
     def __init__(self):
         """Initialize database connection configuration"""
+        # Check if required dependencies are available
+        if not PSYCOPG2_AVAILABLE:
+            raise ImportError(
+                "psycopg2 is not installed. RAG database features require psycopg2. "
+                "Install with: pip install psycopg2-binary"
+            )
+
+        if not OPENAI_AVAILABLE:
+            raise ImportError(
+                "openai package is not installed. RAG database features require openai. "
+                "Install with: pip install openai"
+            )
+
         self.config = {
             'host': os.getenv('PG_HOST', 'localhost'),
             'port': os.getenv('PG_PORT', '5432'),
