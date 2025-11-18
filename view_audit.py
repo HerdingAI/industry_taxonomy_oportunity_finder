@@ -19,6 +19,8 @@ from src.audit_database import AuditDatabase
 
 def format_currency(amount):
     """Format currency with appropriate precision"""
+    if amount is None:
+        amount = 0.0
     if amount < 0.01:
         return f"${amount:.4f}"
     elif amount < 1:
@@ -63,6 +65,11 @@ def list_runs(audit_db: AuditDatabase):
 def show_run_details(audit_db: AuditDatabase, run_id: str):
     """Show detailed information for a specific run"""
     summary = audit_db.get_run_summary(run_id)
+
+    # Check if run exists
+    if 'error' in summary:
+        print(f"\n❌ {summary['error']}\n")
+        return
 
     print(f"\n{'='*80}")
     print(f"RUN DETAILS: {run_id}")

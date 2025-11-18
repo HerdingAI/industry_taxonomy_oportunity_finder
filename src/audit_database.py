@@ -574,7 +574,15 @@ class AuditDatabase:
 
         # Main run data
         cursor.execute("SELECT * FROM analysis_runs WHERE run_id = ?", (run_id,))
-        run_data = dict(cursor.fetchone())
+        row = cursor.fetchone()
+        if not row:
+            return {
+                'error': f'Run ID {run_id} not found',
+                'search_stats': {'count': 0, 'avg_results': 0, 'errors': 0},
+                'llm_stats': {'count': 0, 'total_input_tokens': 0, 'total_output_tokens': 0, 'total_cost': 0, 'avg_duration': 0},
+                'agent_stats': []
+            }
+        run_data = dict(row)
 
         # Search queries
         cursor.execute("""
