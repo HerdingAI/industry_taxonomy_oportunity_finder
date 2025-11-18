@@ -33,9 +33,17 @@ from langchain_core.messages import SystemMessage, HumanMessage
 class ResearchAgent:
     """Gathers market data using web search and structured sources"""
 
-    def __init__(self, llm: ChatOpenAI):
+    def __init__(self, llm: ChatOpenAI, rag_db=None):
+        """
+        Initialize research agent
+
+        Args:
+            llm: Language model for analysis
+            rag_db: Optional RAGDatabase instance for querying existing data
+        """
         self.llm = llm
         self.ddg = DDGS()
+        self.rag_db = rag_db
 
     def _simplify_industry_name(self, industry_name: str) -> str:
         """Convert formal NAICS names to searchable terms"""
@@ -106,15 +114,68 @@ class ResearchAgent:
 
         return []
 
-    def research_industry(self, naics_code: str, industry_name: str = None) -> Dict[str, Any]:
+    def _query_rag_database(self, naics_code: str, industry_name: str) -> Dict[str, Any]:
+        """Query RAG database for existing data on this NAICS code"""
+        if not self.rag_db:
+            return None
+
+        try:
+            # Get industry summary from RAG
+            summary = self.rag_db.get_industry_summary(naics_code=naics_code)
+
+            if not summary or len(summary) == 0:
+                return None
+
+            summary_data = summary[0]
+
+            # Get pain points
+            pain_points = self.rag_db.aggregate_pain_points(naics_code=naics_code)
+
+            # Get recent funding/competitive data
+            funding = self.rag_db.get_recent_funding(naics_code=naics_code, months_back=24)
+
+            # Get automation opportunities
+            automation_opps = self.rag_db.find_automation_opportunities(
+                naics_code=naics_code,
+                min_genai_score=0  # Get all
+            )
+
+            return {
+                'summary': summary_data,
+                'pain_points': pain_points,
+                'competitive_funding': funding,
+                'automation_opportunities': automation_opps,
+                'total_entries': (
+                    summary_data.get('voice_of_customer_count', 0) +
+                    summary_data.get('competitive_intel_count', 0) +
+                    summary_data.get('workflow_intel_count', 0)
+                )
+            }
+
+        except Exception as e:
+            print(f"  ⚠️  RAG database query failed: {e}")
+            return None
+
+    def research_industry(self, naics_code: str, industry_name: str = None, phase: str = "PHASE_1") -> Dict[str, Any]:
         """
         Conduct comprehensive research on a NAICS industry
         Returns structured data with confidence scores
+
+        Args:
+            naics_code: 6-digit NAICS code
+            industry_name: Industry name (optional)
+            phase: "PHASE_1" (quick screening) or "PHASE_2" (deep dive)
         """
 
-        print(f"🔍 Researching NAICS {naics_code}...")
+        print(f"🔍 Researching NAICS {naics_code} ({phase})...")
 
         try:
+            # Step 0: Query RAG database for existing data
+            rag_data = self._query_rag_database(naics_code, industry_name)
+
+            if rag_data:
+                print(f"  📊 Found {rag_data.get('total_entries', 0)} RAG database entries")
+
             # Step 1: Get NAICS definition if not provided
             if not industry_name:
                 try:
@@ -124,13 +185,16 @@ class ResearchAgent:
                     industry_name = f"Industry {naics_code}"  # Fallback
 
             # Step 2: Gather market data through targeted searches
-            market_data = self._gather_market_data(naics_code, industry_name)
+            # Reduce queries if we have RAG data
+            market_data = self._gather_market_data(naics_code, industry_name, rag_data)
 
             # Step 3: Research competitive landscape
-            competitive_data = self._research_competition(naics_code, industry_name)
+            # Use RAG competitive intelligence if available
+            competitive_data = self._research_competition(naics_code, industry_name, rag_data)
 
             # Step 4: Identify technology stack and pain points
-            tech_and_pain = self._research_tech_and_pain(naics_code, industry_name)
+            # Use RAG voice-of-customer and workflow data
+            tech_and_pain = self._research_tech_and_pain(naics_code, industry_name, rag_data, phase)
 
             # Step 5: Consolidate and structure findings
             consolidated = self._consolidate_findings(
@@ -214,20 +278,24 @@ Return ONLY the industry name, nothing else."""
 
         return response.content.strip()
 
-    def _gather_market_data(self, naics_code: str, industry_name: str) -> Dict[str, Any]:
+    def _gather_market_data(self, naics_code: str, industry_name: str, rag_data: Dict = None) -> Dict[str, Any]:
         """Search for market size, growth, employment data"""
 
         # Use simplified, searchable industry terms
         search_term = self._simplify_industry_name(industry_name)
 
-        # Use natural language queries that match how people actually write
-        # Focus on industry terms, not NAICS codes
-        # Reduced from 5 to 3 queries to minimize rate limiting
-        queries = [
-            f"{search_term} market size 2024",
-            f"how big is the {search_term} industry",
-            f"{search_term} industry trends 2024"
-        ]
+        # Adaptive search based on RAG data availability
+        if rag_data and rag_data.get('total_entries', 0) > 20:
+            # Have good RAG data, reduce web searches
+            queries = [f"{search_term} market size 2024"]
+            print(f"  📊 Using RAG data, reducing market searches to 1 query")
+        else:
+            # Limited RAG data, do more web searches
+            queries = [
+                f"{search_term} market size 2024",
+                f"how big is the {search_term} industry",
+                f"{search_term} industry trends 2024"
+            ]
 
         search_results = []
         for query in queries:
@@ -288,17 +356,35 @@ Focus on numbers. If you see ranges, use the midpoint. If data is for a year oth
 
         return result
 
-    def _research_competition(self, naics_code: str, industry_name: str) -> Dict[str, Any]:
+    def _research_competition(self, naics_code: str, industry_name: str, rag_data: Dict = None) -> Dict[str, Any]:
         """Research competitive dynamics and major players"""
 
         search_term = self._simplify_industry_name(industry_name)
 
-        # Reduced from 4 to 3 queries to minimize rate limiting
-        queries = [
-            f"top companies in {search_term}",
-            f"{search_term} market leaders",
-            f"biggest {search_term} companies"
-        ]
+        # Check RAG database for competitive intel
+        rag_competitive_data = {}
+        if rag_data and rag_data.get('competitive_funding'):
+            funding_data = rag_data['competitive_funding']
+            if len(funding_data) > 0:
+                print(f"  📊 Found {len(funding_data)} funded startups in RAG database")
+                rag_competitive_data = {
+                    'funded_startups': funding_data,
+                    'total_funding': sum(f.get('funding_amount_usd', 0) or 0 for f in funding_data),
+                    'recent_activity': len([f for f in funding_data if f.get('funding_date')])
+                }
+
+        # Adaptive search based on RAG competitive data
+        if rag_competitive_data.get('recent_activity', 0) > 5:
+            # Have good RAG competitive data, reduce searches
+            queries = [f"top companies in {search_term}"]
+            print(f"  📊 Using RAG competitive data, reducing to 1 query")
+        else:
+            # Need more competitive intelligence
+            queries = [
+                f"top companies in {search_term}",
+                f"{search_term} market leaders",
+                f"biggest {search_term} companies"
+            ]
 
         search_results = []
         for query in queries:
@@ -353,17 +439,40 @@ If you can't find HHI, estimate based on market structure descriptions."""
 
         return result
 
-    def _research_tech_and_pain(self, naics_code: str, industry_name: str) -> Dict[str, Any]:
+    def _research_tech_and_pain(self, naics_code: str, industry_name: str, rag_data: Dict = None, phase: str = "PHASE_1") -> Dict[str, Any]:
         """Research technology usage and pain points"""
 
         search_term = self._simplify_industry_name(industry_name)
 
-        # Reduced from 5 to 3 queries to minimize rate limiting
-        queries = [
-            f"what software do {search_term} companies use",
-            f"{search_term} biggest challenges",
-            f"{search_term} pain points"
-        ]
+        # Check RAG database for pain points and workflow data
+        rag_pain_data = {}
+        if rag_data:
+            pain_points = rag_data.get('pain_points', [])
+            automation_opps = rag_data.get('automation_opportunities', [])
+
+            if len(pain_points) > 0 or len(automation_opps) > 0:
+                print(f"  📊 Found {len(pain_points)} pain point categories and {len(automation_opps)} workflows in RAG")
+                rag_pain_data = {
+                    'pain_points': pain_points,
+                    'automation_opportunities': automation_opps
+                }
+
+        # Build search queries based on phase and RAG data
+        queries = []
+
+        if phase == "PHASE_2" or not rag_pain_data:
+            # Phase II or no RAG data: Use site-specific searches for VOC
+            queries.extend([
+                f'site:reddit.com "{search_term}" software complaints',
+                f'site:g2.com "{search_term}" reviews',
+                f"{search_term} pain points challenges"
+            ])
+        else:
+            # Phase I with RAG data: Lighter searches
+            queries.extend([
+                f"what software do {search_term} companies use",
+                f"{search_term} biggest challenges"
+            ])
 
         search_results = []
         for query in queries:
