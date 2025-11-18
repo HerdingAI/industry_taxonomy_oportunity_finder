@@ -11,21 +11,28 @@ from langgraph.graph import StateGraph, END
 from langchain_openai import ChatOpenAI
 
 from .database import DatabaseManager
+from .rag_database import RAGDatabase
 from .research_agent import ResearchAgent
 from .strategic_agent import StrategicAnalyst
 from .quantitative_agent import QuantitativeAnalyst
 from .synthesizer_agent import SynthesizerAgent
+from .supervisor_agent import SupervisorAgent
+from .technical_data_scientist_agent import TechnicalDataScientistAgent
+from .product_manager_agent import ProductManagerAgent
 
 
 class AnalysisState(TypedDict):
     """State passed between agents"""
     naics_code: str
     industry_name: str
+    phase: str  # "PHASE_1" or "PHASE_2"
 
     # Agent outputs
     research_data: Dict[str, Any]
     strategic_data: Dict[str, Any]
     quantitative_data: Dict[str, Any]
+    customer_analysis: Dict[str, Any]  # Product Manager output
+    automation_analysis: Dict[str, Any]  # Technical Data Scientist output
     final_report: str
 
     # Metadata
@@ -61,14 +68,27 @@ class IndustryAnalyzer:
             max_tokens=4000
         )
 
-        # Initialize database
+        # Initialize databases
         self.db = DatabaseManager(db_dir)
 
-        # Initialize agents
-        self.research_agent = ResearchAgent(self.llm)
-        self.strategic_agent = StrategicAnalyst(self.llm)
-        self.quant_agent = QuantitativeAnalyst(self.llm)
+        # Initialize RAG database (optional - gracefully handles if not configured)
+        try:
+            self.rag_db = RAGDatabase()
+            print("✅ RAG database connected")
+        except Exception as e:
+            print(f"⚠️  RAG database not available: {e}")
+            self.rag_db = None
+
+        # Initialize agents (pass RAG database where needed)
+        self.research_agent = ResearchAgent(self.llm, rag_db=self.rag_db)
+        self.strategic_agent = StrategicAnalyst(self.llm, rag_db=self.rag_db)
+        self.quant_agent = QuantitativeAnalyst(self.llm, rag_db=self.rag_db)
         self.synthesizer = SynthesizerAgent(self.llm)
+
+        # New agents for MBA-Data Science methodology
+        self.supervisor_agent = SupervisorAgent(self.llm, query_budget=3000)
+        self.technical_ds_agent = TechnicalDataScientistAgent(self.llm, rag_db=self.rag_db)
+        self.product_mgr_agent = ProductManagerAgent(self.llm, rag_db=self.rag_db)
 
         # Build workflow
         self.workflow = self._build_workflow()
@@ -80,14 +100,18 @@ class IndustryAnalyzer:
 
         # Add nodes
         workflow.add_node("research", self._research_node)
+        workflow.add_node("customer_analysis", self._customer_analysis_node)
+        workflow.add_node("automation_analysis", self._automation_analysis_node)
         workflow.add_node("strategic_analysis", self._strategic_node)
         workflow.add_node("quantitative_analysis", self._quantitative_node)
         workflow.add_node("synthesize", self._synthesize_node)
         workflow.add_node("save_results", self._save_node)
 
-        # Define flow
+        # Define flow: Research → Customer & Automation (parallel) → Strategic → Quantitative → Synthesize → Save
         workflow.set_entry_point("research")
-        workflow.add_edge("research", "strategic_analysis")
+        workflow.add_edge("research", "customer_analysis")
+        workflow.add_edge("customer_analysis", "automation_analysis")
+        workflow.add_edge("automation_analysis", "strategic_analysis")
         workflow.add_edge("strategic_analysis", "quantitative_analysis")
         workflow.add_edge("quantitative_analysis", "synthesize")
         workflow.add_edge("synthesize", "save_results")
@@ -98,9 +122,11 @@ class IndustryAnalyzer:
     def _research_node(self, state: AnalysisState) -> AnalysisState:
         """Research agent node"""
         try:
+            phase = state.get('phase', 'PHASE_1')
             research_data = self.research_agent.research_industry(
                 state['naics_code'],
-                state.get('industry_name')
+                state.get('industry_name'),
+                phase=phase
             )
 
             state['research_data'] = research_data
@@ -126,10 +152,58 @@ class IndustryAnalyzer:
 
         return state
 
+    def _customer_analysis_node(self, state: AnalysisState) -> AnalysisState:
+        """Product Manager agent node - customer and buyer persona analysis"""
+        try:
+            if not self.product_mgr_agent.rag_db:
+                print("⚠️  Skipping customer analysis (RAG database not available)")
+                state['customer_analysis'] = {}
+                return state
+
+            customer_analysis = self.product_mgr_agent.analyze_customer_landscape(
+                naics_code=state['naics_code'],
+                industry_name=state['industry_name']
+            )
+
+            state['customer_analysis'] = customer_analysis
+
+        except Exception as e:
+            print(f"❌ Customer analysis failed: {e}")
+            state['customer_analysis'] = {}
+            state['error'] = f"Customer analysis error: {str(e)}"
+            state['error_count'] = state.get('error_count', 0) + 1
+
+        return state
+
+    def _automation_analysis_node(self, state: AnalysisState) -> AnalysisState:
+        """Technical Data Scientist agent node - automation potential analysis"""
+        try:
+            if not self.technical_ds_agent.rag_db:
+                print("⚠️  Skipping automation analysis (RAG database not available)")
+                state['automation_analysis'] = {}
+                return state
+
+            automation_analysis = self.technical_ds_agent.analyze_industry_automation_potential(
+                naics_code=state['naics_code']
+            )
+
+            state['automation_analysis'] = automation_analysis
+
+        except Exception as e:
+            print(f"❌ Automation analysis failed: {e}")
+            state['automation_analysis'] = {}
+            state['error'] = f"Automation analysis error: {str(e)}"
+            state['error_count'] = state.get('error_count', 0) + 1
+
+        return state
+
     def _strategic_node(self, state: AnalysisState) -> AnalysisState:
         """Strategic analysis node"""
         try:
-            strategic_data = self.strategic_agent.analyze(state['research_data'])
+            strategic_data = self.strategic_agent.analyze(
+                state['research_data'],
+                naics_code=state['naics_code']
+            )
             state['strategic_data'] = strategic_data
 
             # Store strategic insights in vector DB
@@ -158,7 +232,9 @@ class IndustryAnalyzer:
         try:
             quant_data = self.quant_agent.analyze(
                 state['research_data'],
-                state['strategic_data']
+                state['strategic_data'],
+                customer_analysis=state.get('customer_analysis'),
+                automation_analysis=state.get('automation_analysis')
             )
             state['quantitative_data'] = quant_data
 
@@ -172,10 +248,17 @@ class IndustryAnalyzer:
     def _synthesize_node(self, state: AnalysisState) -> AnalysisState:
         """Synthesize final report"""
         try:
+            # Use business_model format for Phase 2, comprehensive for Phase 1
+            phase = state.get('phase', 'PHASE_1')
+            report_format = "business_model" if phase == "PHASE_2" else "comprehensive"
+
             report = self.synthesizer.synthesize(
                 state['research_data'],
                 state['strategic_data'],
-                state['quantitative_data']
+                state['quantitative_data'],
+                customer_analysis=state.get('customer_analysis'),
+                automation_analysis=state.get('automation_analysis'),
+                report_format=report_format
             )
             state['final_report'] = report
 
@@ -283,20 +366,21 @@ class IndustryAnalyzer:
         }
         return mapping.get(maturity, 50.0)
 
-    def analyze(self, naics_code: str, industry_name: str = None) -> Dict[str, Any]:
+    def analyze(self, naics_code: str, industry_name: str = None, phase: str = "PHASE_1") -> Dict[str, Any]:
         """
         Run complete analysis for a NAICS code
 
         Args:
             naics_code: 6-digit NAICS code
             industry_name: Optional industry name (will be looked up if not provided)
+            phase: Analysis phase - "PHASE_1" (quick screening) or "PHASE_2" (deep dive)
 
         Returns:
             Analysis results including final report
         """
 
         print(f"\n{'='*60}")
-        print(f"🚀 NAICS {naics_code} Analysis Starting")
+        print(f"🚀 NAICS {naics_code} Analysis Starting ({phase})")
         print(f"{'='*60}\n")
 
         start_time = datetime.now()
@@ -305,9 +389,12 @@ class IndustryAnalyzer:
         initial_state: AnalysisState = {
             'naics_code': naics_code,
             'industry_name': industry_name or '',
+            'phase': phase,
             'research_data': {},
             'strategic_data': {},
             'quantitative_data': {},
+            'customer_analysis': {},
+            'automation_analysis': {},
             'final_report': '',
             'error': '',
             'error_count': 0,
