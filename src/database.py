@@ -164,6 +164,43 @@ class DatabaseManager:
             )
         """)
 
+        # Phase 2: Data-Vendor Opportunities table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS data_vendor_opportunities (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                naics_8_digit TEXT NOT NULL,
+                segment_description TEXT,
+                run_id TEXT NOT NULL,
+                analysis_date TIMESTAMP,
+
+                -- Summary metrics
+                total_opportunities INTEGER,
+                tier1_count INTEGER,
+                tier2_count INTEGER,
+                tier3_count INTEGER,
+                total_tam REAL,
+                avg_composite_score REAL,
+
+                -- Complete analysis JSON blob
+                full_analysis_json TEXT,
+
+                -- Metadata
+                avg_confidence REAL,
+                search_queries_executed INTEGER,
+                llm_calls_made INTEGER,
+                total_cost REAL,
+                processing_time_seconds INTEGER,
+
+                UNIQUE(naics_8_digit, run_id)
+            )
+        """)
+
+        # Indexes for Phase 2
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_naics_8digit ON data_vendor_opportunities(naics_8_digit)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_run_id ON data_vendor_opportunities(run_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_tier1_count ON data_vendor_opportunities(tier1_count)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_composite_score ON data_vendor_opportunities(avg_composite_score)")
+
         # Create useful views
         cursor.execute("""
             CREATE VIEW IF NOT EXISTS top_opportunities AS
@@ -200,6 +237,34 @@ class DatabaseManager:
             LEFT JOIN opportunities o ON i.naics_code = o.naics_code
             GROUP BY i.naics_code
             ORDER BY i.overall_score DESC
+        """)
+
+        # Phase 2 views
+        cursor.execute("""
+            CREATE VIEW IF NOT EXISTS phase2_tier1_opportunities AS
+            SELECT
+                naics_8_digit,
+                segment_description,
+                tier1_count,
+                total_tam,
+                avg_composite_score,
+                analysis_date
+            FROM data_vendor_opportunities
+            WHERE tier1_count > 0
+            ORDER BY tier1_count DESC, avg_composite_score DESC
+        """)
+
+        cursor.execute("""
+            CREATE VIEW IF NOT EXISTS phase2_summary AS
+            SELECT
+                COUNT(*) as total_analyzed,
+                SUM(tier1_count) as total_tier1_opps,
+                SUM(tier2_count) as total_tier2_opps,
+                SUM(total_tam) as cumulative_tam,
+                AVG(avg_composite_score) as avg_score,
+                SUM(processing_time_seconds) as total_processing_time,
+                SUM(total_cost) as total_cost
+            FROM data_vendor_opportunities
         """)
 
         self.conn.commit()
@@ -341,6 +406,182 @@ class DatabaseManager:
         """Get summary of all analyzed industries"""
         cursor = self.conn.cursor()
         cursor.execute("SELECT * FROM industry_summary")
+        return [dict(row) for row in cursor.fetchall()]
+
+    # ====================
+    # Phase 2: Data-Vendor Operations
+    # ====================
+
+    def save_data_vendor_analysis(
+        self,
+        naics_8_digit: str,
+        segment_description: str,
+        analysis_results: Dict[str, Any]
+    ) -> int:
+        """
+        Save Phase 2 data-vendor opportunity analysis results
+
+        Args:
+            naics_8_digit: 8-digit NAICS code
+            segment_description: Segment description
+            analysis_results: Complete analysis results from DataVendorAnalyzer
+
+        Returns:
+            Database row ID
+        """
+        cursor = self.conn.cursor()
+
+        # Extract summary metrics
+        opportunities = analysis_results.get('ranked_opportunities', [])
+        metadata = analysis_results.get('metadata', {})
+
+        tier1_count = sum(1 for opp in opportunities if opp.get('tier') == 'TIER_1')
+        tier2_count = sum(1 for opp in opportunities if opp.get('tier') == 'TIER_2')
+        tier3_count = sum(1 for opp in opportunities if opp.get('tier') == 'TIER_3')
+
+        # Calculate aggregate metrics
+        total_tam = sum(opp.get('market_size_score', {}).get('tam', 0) for opp in opportunities)
+        avg_composite = sum(opp.get('composite_score', 0) for opp in opportunities) / len(opportunities) if opportunities else 0
+        avg_confidence = sum(opp.get('confidence', 0) for opp in opportunities) / len(opportunities) if opportunities else 0
+
+        # Get run metadata
+        run_id = metadata.get('run_id', 'unknown')
+        processing_time = metadata.get('total_execution_time_seconds', 0)
+
+        cursor.execute("""
+            INSERT OR REPLACE INTO data_vendor_opportunities (
+                naics_8_digit, segment_description, run_id, analysis_date,
+                total_opportunities, tier1_count, tier2_count, tier3_count,
+                total_tam, avg_composite_score,
+                full_analysis_json,
+                avg_confidence, search_queries_executed, llm_calls_made,
+                total_cost, processing_time_seconds
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            naics_8_digit,
+            segment_description,
+            run_id,
+            datetime.now().isoformat(),
+            len(opportunities),
+            tier1_count,
+            tier2_count,
+            tier3_count,
+            total_tam,
+            avg_composite,
+            json.dumps(analysis_results),
+            avg_confidence,
+            0,  # Search queries (tracked in audit DB)
+            0,  # LLM calls (tracked in audit DB)
+            0.0,  # Cost (tracked in audit DB)
+            processing_time
+        ))
+
+        self.conn.commit()
+        return cursor.lastrowid
+
+    def get_data_vendor_analysis(
+        self,
+        naics_8_digit: str,
+        run_id: Optional[str] = None
+    ) -> Optional[Dict]:
+        """
+        Retrieve Phase 2 analysis for a NAICS code
+
+        Args:
+            naics_8_digit: 8-digit NAICS code
+            run_id: Optional specific run ID (gets latest if not provided)
+
+        Returns:
+            Complete analysis results or None
+        """
+        cursor = self.conn.cursor()
+
+        if run_id:
+            cursor.execute("""
+                SELECT * FROM data_vendor_opportunities
+                WHERE naics_8_digit = ? AND run_id = ?
+            """, (naics_8_digit, run_id))
+        else:
+            cursor.execute("""
+                SELECT * FROM data_vendor_opportunities
+                WHERE naics_8_digit = ?
+                ORDER BY analysis_date DESC
+                LIMIT 1
+            """, (naics_8_digit,))
+
+        row = cursor.fetchone()
+        if not row:
+            return None
+
+        result = dict(row)
+        # Parse JSON blob
+        if result.get('full_analysis_json'):
+            result['analysis'] = json.loads(result['full_analysis_json'])
+
+        return result
+
+    def get_all_tier1_opportunities(self) -> List[Dict]:
+        """Get all segments with TIER_1 opportunities"""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM phase2_tier1_opportunities")
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_phase2_summary(self) -> Optional[Dict]:
+        """Get overall Phase 2 analysis summary"""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT * FROM phase2_summary")
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+    def compare_naics_opportunities(self, naics_list: List[str]) -> List[Dict]:
+        """
+        Compare Phase 2 opportunities across multiple NAICS codes
+
+        Args:
+            naics_list: List of 8-digit NAICS codes
+
+        Returns:
+            Comparison data for each NAICS
+        """
+        cursor = self.conn.cursor()
+        placeholders = ','.join('?' * len(naics_list))
+
+        cursor.execute(f"""
+            SELECT
+                naics_8_digit,
+                segment_description,
+                tier1_count,
+                tier2_count,
+                total_opportunities,
+                total_tam,
+                avg_composite_score,
+                analysis_date
+            FROM data_vendor_opportunities
+            WHERE naics_8_digit IN ({placeholders})
+            ORDER BY avg_composite_score DESC
+        """, naics_list)
+
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_top_phase2_opportunities(self, min_tier1: int = 1, limit: int = 20) -> List[Dict]:
+        """
+        Get top Phase 2 opportunities by composite score
+
+        Args:
+            min_tier1: Minimum number of TIER_1 opportunities
+            limit: Max results to return
+
+        Returns:
+            Top opportunities
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT * FROM data_vendor_opportunities
+            WHERE tier1_count >= ?
+            ORDER BY avg_composite_score DESC, tier1_count DESC
+            LIMIT ?
+        """, (min_tier1, limit))
+
         return [dict(row) for row in cursor.fetchall()]
 
     # ====================
