@@ -324,11 +324,9 @@ class DataVendorAnalyzer:
 
         try:
             data_needs = state.get('data_needs', {}).get('data_needs', [])
-            vendor_landscape = state.get('vendor_landscape', {})
 
-            market_sizing = self.data_market_sizer.calculate_market_size(
+            market_sizing = self.data_market_sizer.size_market(
                 data_needs=data_needs,
-                vendor_landscape=vendor_landscape,
                 naics_8_digit=state['naics_8_digit'],
                 segment_description=state['segment_description'],
                 run_id=state['run_id']
@@ -354,12 +352,12 @@ class DataVendorAnalyzer:
         start = time.time()
 
         try:
+            data_needs = state.get('data_needs', {}).get('data_needs', [])
             source_mapping = state.get('source_mapping', {})
-            vendor_landscape = state.get('vendor_landscape', {})
 
-            moat_analysis = self.data_moat_analyzer.analyze_moat(
+            moat_analysis = self.data_moat_analyzer.analyze_moats(
+                data_needs=data_needs,
                 source_mapping=source_mapping,
-                vendor_landscape=vendor_landscape,
                 naics_8_digit=state['naics_8_digit'],
                 segment_description=state['segment_description'],
                 run_id=state['run_id']
@@ -386,12 +384,12 @@ class DataVendorAnalyzer:
 
         try:
             data_needs = state.get('data_needs', {}).get('data_needs', [])
-            source_mapping = state.get('source_mapping', {})
+            vendor_landscape = state.get('vendor_landscape', {})
             market_sizing = state.get('market_sizing', {})
 
             product_design = self.data_product_designer.design_product(
                 data_needs=data_needs,
-                source_mapping=source_mapping,
+                vendor_landscape=vendor_landscape,
                 market_sizing=market_sizing,
                 naics_8_digit=state['naics_8_digit'],
                 segment_description=state['segment_description'],
@@ -419,14 +417,14 @@ class DataVendorAnalyzer:
 
         try:
             final_report = self.data_opportunity_synthesizer.synthesize_opportunities(
+                naics_8_digit=state['naics_8_digit'],
+                segment_description=state['segment_description'],
                 data_needs=state.get('data_needs', {}),
                 vendor_landscape=state.get('vendor_landscape', {}),
                 source_mapping=state.get('source_mapping', {}),
                 market_sizing=state.get('market_sizing', {}),
                 moat_analysis=state.get('moat_analysis', {}),
                 product_design=state.get('product_design', {}),
-                naics_8_digit=state['naics_8_digit'],
-                segment_description=state['segment_description'],
                 run_id=state['run_id']
             )
 
